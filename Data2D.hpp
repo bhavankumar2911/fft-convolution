@@ -54,7 +54,7 @@ public:
 
         return sum;
     }
-    
+
     static void printAbsoluteDifference(
             const vector<vector<double>>& firstMatrix,
             const vector<vector<double>>& secondMatrix)
@@ -188,8 +188,8 @@ public:
             in.read(reinterpret_cast<char*>(matrix[y].data()),
                     static_cast<std::streamsize>(matrixWidth * sizeof(double)));
 
-        cout << "Loaded matrix dims: " << matrix.size() << " x "
-             << (matrix.empty() ? 0 : matrix[0].size()) << '\n';
+        // cout << "Loaded matrix dims: " << matrix.size() << " x "
+        //      << (matrix.empty() ? 0 : matrix[0].size()) << '\n';
     }
 
     // Accessors

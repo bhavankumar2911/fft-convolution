@@ -83,14 +83,12 @@ private:
 
         if (!useConjugateOfB)
         {
-            cout << "not using conj";
             for (int y = 0; y < h; ++y)
                 for (int x = 0; x < w; ++x)
                     a[y][x] *= b[y][x];
         }
         else
         {
-            cout << "using conj";
             for (int y = 0; y < h; ++y)
                 for (int x = 0; x < w; ++x)
                     a[y][x] *= std::conj(b[y][x]);
