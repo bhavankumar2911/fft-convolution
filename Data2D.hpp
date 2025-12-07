@@ -30,6 +30,31 @@ private:
     }
 
 public:
+    static double sumAbsoluteDifference(
+            const vector<vector<double>>& firstMatrix,
+            const vector<vector<double>>& secondMatrix)
+    {
+        const int heightA = firstMatrix.size();
+        const int heightB = secondMatrix.size();
+
+        if (heightA == 0 || heightB == 0)
+            throw runtime_error("Matrices must not be empty");
+
+        const int widthA = firstMatrix[0].size();
+        const int widthB = secondMatrix[0].size();
+
+        if (heightA != heightB || widthA != widthB)
+            throw runtime_error("Matrix dimensions do not match for sumAbsoluteDifference");
+
+        double sum = 0.0;
+
+        for (int y = 0; y < heightA; ++y)
+            for (int x = 0; x < widthA; ++x)
+                sum += std::abs(firstMatrix[y][x] - secondMatrix[y][x]);
+
+        return sum;
+    }
+    
     static void printAbsoluteDifference(
             const vector<vector<double>>& firstMatrix,
             const vector<vector<double>>& secondMatrix)
@@ -143,7 +168,6 @@ public:
             throw invalid_argument("loadFromBinary: dimensions must be positive");
 
         string file = buildFilePath(folderPath, height, width);
-        cout << "Loading matrix from: " << file << '\n';
 
         ifstream in(file, ios::binary);
         if (!in) throw runtime_error("Failed to open input file: " + file);
@@ -151,7 +175,6 @@ public:
         int h = 0, w = 0;
         in.read(reinterpret_cast<char*>(&h), sizeof(int));
         in.read(reinterpret_cast<char*>(&w), sizeof(int));
-        cout << "Header dims: " << h << " x " << w << '\n';
 
         if (h != height || w != width)
             throw runtime_error("loadFromBinary: file header dims do not match provided dims");

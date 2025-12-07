@@ -2,148 +2,113 @@
 #include "NaiveConvolution.hpp"
 #include "FftTransform.hpp"
 #include "FftConvolution.hpp"
-#include "fftwConv.hpp"
+
 #include <iostream>
 #include <string>
-#include <armadillo>
+#include <iomanip>
 
-using namespace arma;
 using namespace std;
 
-arma::mat toArma(const vector<vector<double>>& v) {
-    size_t R = v.size();
-    size_t C = (R > 0 ? v[0].size() : 0);
-    mat M(R, C);
-    for (size_t i = 0; i < R; ++i)
-        for (size_t j = 0; j < C; ++j)
-            M(i,j) = v[i][j];
-    return M;
-}
-
-std::vector<std::vector<double>> armaMatToVector2D(const arma::mat & M) {
-    size_t rows = M.n_rows;
-    size_t cols = M.n_cols;
-    std::vector<std::vector<double>> out;
-    out.reserve(rows);
-
-    for (size_t i = 0; i < rows; ++i) {
-        // Use arma::conv_to to convert a row to std::vector<double>
-        std::vector<double> row = arma::conv_to<std::vector<double>>::from(M.row(i));
-        out.push_back(std::move(row));
-    }
-    return out;
+void printUsageAndExit(const char* prog) {
+    cout << "Usage: " << prog << " <imageBin> <imageH> <imageW> "
+         << "<kernelBin> <kernelH> <kernelW> "
+         << "<outputMode> <useNextPow2> <printDiff>\n\n"
+         << "  <outputMode>     : full | same | valid\n"
+         << "  <useNextPow2>    : 0 or 1\n"
+         << "  <printDiff>      : 0 or 1\n";
+    exit(1);
 }
 
 int main(int argc, char* argv[])
 {
-    if (argc < 9)
-    {
-        cout << "Usage: ./program "
-             << "<imageFolder> <imageH> <imageW> "
-             << "<kernelFolder> <kernelH> <kernelW> "
-             << "<fftOutputCropMode> <useNextPowerOf2>\n";
+    if (argc < 10) printUsageAndExit(argv[0]);
+
+    string imageBin  = argv[1];
+    int imageH       = stoi(argv[2]);
+    int imageW       = stoi(argv[3]);
+
+    string kernelBin = argv[4];
+    int kernelH      = stoi(argv[5]);
+    int kernelW      = stoi(argv[6]);
+
+    string outputMode = argv[7];
+    bool useNextPow2  = (stoi(argv[8]) != 0);
+    bool printDiff    = (stoi(argv[9]) != 0);
+
+    if (outputMode != "full" && outputMode != "same" && outputMode != "valid") {
+        cerr << "outputMode must be one of: full, same, valid\n";
         return 1;
     }
 
-    string imageFolder = argv[1];
-    int imageH = stoi(argv[2]);
-    int imageW = stoi(argv[3]);
-
-    string kernelFolder = argv[4];
-    int kernelH = stoi(argv[5]);
-    int kernelW = stoi(argv[6]);
-
-    string fftOutputCropMode = argv[7];
-    // bool useNextPowerOf2 = (stoi(argv[8]) != 0);
-    bool useNextPowerOf2 = true;
-
+    // Load matrices
     Data2D image;
     Data2D kernel;
+    image.loadFromBinary(imageBin, imageH, imageW);
+    kernel.loadFromBinary(kernelBin, kernelH, kernelW);
 
-    image.loadFromBinary(imageFolder, imageH, imageW);
-    kernel.loadFromBinary(kernelFolder, kernelH, kernelW);
+    cout << fixed << setprecision(6);
+    cout << "=== Convolution Comparison (Naive vs FFT) ===\n\n";
 
+    cout << "Image:  " << imageBin 
+         << " (" << imageH << "x" << imageW << ")\n";
+    cout << "Kernel: " << kernelBin 
+         << " (" << kernelH << "x" << kernelW << ")\n";
+    cout << "Output mode: " << outputMode 
+         << "   padToNextPow2: " << (useNextPow2 ? "true" : "false") << "\n\n";
+
+    // Run naive convolution
     NaiveConvolution2D naiveConv(image.getMatrix(), kernel.getMatrix());
-    auto naiveResult = naiveConv.computeConvolution(fftOutputCropMode);
+    auto naiveResult = naiveConv.computeConvolution(outputMode);
 
-    // armadillo lib naive conv
-    mat A = toArma(image.getMatrix());
-    mat K = toArma(kernel.getMatrix());
-
-    mat armadilloConvResult = conv2(A, K, "valid");
-    mat flippedArmadilloConvResult = conv2(A, flipud(fliplr(K)), fftOutputCropMode.c_str());
-
-    // cout << "\narmadillo conv matrix\n";
-    // Data2D::printMatrix(armaMatToVector2D(armadilloConvResult));
-
-    // cout << "\narmadillo flipped conv matrix\n";
-    // Data2D::printMatrix(armaMatToVector2D(flippedArmadilloConvResult));
-
-    // cout << "Naive Convolution time: "
-    //      << naiveResult.elapsedMilliseconds << " ms\n";
-
-    // cout << "FFT Convolution time: "
-    //      << fftResult.elapsedMilliseconds << " ms\n";
-
-    // cout << naiveResult.resultMatrix.size() << endl
-    //      << naiveResult.resultMatrix[0].size() << endl
-    //      << fftResult.resultMatrix.getHeight() << endl
-    //      << fftResult.resultMatrix.getWidth() << endl;
-
-    cout << "checking correctness of naive covn" << endl;
-    cout << "\n diff between naive conv vs flipped armadillo conv\n";
-    Data2D::printAbsoluteDifference(
-        armaMatToVector2D(flippedArmadilloConvResult),
-        naiveResult.resultMatrix
-    );
-
-    // cout << "checking correctness of fft covn" << endl;
-    
-    // cout << "\n diff between fft conv vs fftw conv (correlation)\n";
+    // Run FFT convolution (own implementation)
     auto fftResult = FftConvolver::convolve(
         image,
         kernel,
-        fftOutputCropMode,
-        FftConvolver::OperationMode::Correlation,
-        useNextPowerOf2
-    );
-    auto fftwResult = fft_conv2d_full(image.getMatrix(), kernel.getMatrix(), true, useNextPowerOf2);
-    // cout << fftResult.resultMatrix.getMatrix().size() << endl << fftResult.resultMatrix.getMatrix()[0].size() << endl
-    //     << fftwResult.size() << endl << fftwResult[0].size() << endl;
-    // Data2D::printAbsoluteDifference(
-    //     fftResult.resultMatrix.getMatrix(),
-    //     fftwResult
-    // );
-
-    // cout << "\n diff between fft conv vs fftw conv (convolution)\n";
-    // auto fftResultConv = FftConvolver::convolve(
-    //     image,
-    //     kernel,
-    //     fftOutputCropMode,
-    //     FftConvolver::OperationMode::Convolution,
-    //     useNextPowerOf2
-    // );
-    // auto fftwResultConv = fft_conv2d_full(image.getMatrix(), kernel.getMatrix(), false, useNextPowerOf2);
-    // cout << fftResultConv.resultMatrix.getMatrix().size() << endl << fftResultConv.resultMatrix.getMatrix()[0].size() << endl
-    // << fftwResultConv.size() << endl << fftwResultConv[0].size() << endl;
-    // Data2D::printAbsoluteDifference(
-    //     fftResultConv.resultMatrix.getMatrix(),
-    //     fftwResultConv
-    // );
-
-    cout << "checking correctness marmadillo conv and fft conv (between own fft and armadillo implementation)" << endl;
-    Data2D::printAbsoluteDifference(
-        // naiveResult.resultMatrix,
-        armaMatToVector2D(flippedArmadilloConvResult),
-        fftResult.resultMatrix.getMatrix()
+        outputMode,
+        FftConvolver::OperationMode::Correlation,  // cross-correlation (matching naive)
+        useNextPow2
     );
 
-    cout << "checking correctness naive and fft conv (between own implementation)" << endl;
-    Data2D::printAbsoluteDifference(
+    // Print timings
+    cout << "Execution Times:\n";
+    cout << "  Naive: " << naiveResult.elapsedMilliseconds << " ms\n";
+    cout << "  FFT  : " << fftResult.elapsedMilliseconds << " ms\n\n";
+
+    // Determine which is faster
+    double naiveMs = naiveResult.elapsedMilliseconds;
+    double fftMs   = fftResult.elapsedMilliseconds;
+
+    if (naiveMs > 0 && fftMs > 0) {
+        string winner = (fftMs < naiveMs) ? "FFT" : "Naive";
+        double fasterBy = fabs(naiveMs - fftMs);
+        double percent  = (winner == "FFT")
+                            ? ((naiveMs - fftMs) / naiveMs * 100.0)
+                            : ((fftMs - naiveMs) / fftMs * 100.0);
+
+        cout << winner << " is faster by "
+             << fasterBy << " ms  (" << percent << "%)\n\n";
+    }
+
+    // Print correctness via Data2D utility
+    cout << "=== Numerical Difference (Naive vs FFT) ===\n";
+
+    if (printDiff) {
+        cout << "Absolute difference matrix:\n";
+        Data2D::printAbsoluteDifference(
+            naiveResult.resultMatrix,
+            fftResult.resultMatrix.getMatrix()
+        );
+    } else {
+        cout << "(Difference matrix not printed. Use <printDiff>=1 to enable.)\n\n";
+    }
+
+    double totalAbsDiff = Data2D::sumAbsoluteDifference(
         naiveResult.resultMatrix,
-        // armaMatToVector2D(flippedArmadilloConvResult),
         fftResult.resultMatrix.getMatrix()
     );
 
+    cout << "Total absolute difference = " << totalAbsDiff << "\n";
+
+    cout << "\n=== END ===\n";
     return 0;
 }

@@ -97,10 +97,11 @@ public:
     // General-purpose builder:
     // - minHeight/minWidth: the minimum required size (e.g. A_h + B_h - 1 for convolution correctness)
     // - padToNextPowerOfTwo: if true, after ensuring the minimum size pad up to next power of two
+    // replace existing buildPaddedComplexMatrix with this
     static ComplexMatrix buildPaddedComplexMatrix(const Data2D &source,
-                                                  int minHeight,
-                                                  int minWidth,
-                                                  bool padToNextPowerOfTwo)
+                                                int minHeight,
+                                                int minWidth,
+                                                bool padToNextPowerOfTwo)
     {
         int sourceH = source.getHeight();
         int sourceW = source.getWidth();
@@ -111,14 +112,20 @@ public:
         int targetW = std::max(minWidth, sourceW);
 
         if (padToNextPowerOfTwo) {
-            targetH = nextPowerOfTwoInt(targetH);
-            targetW = nextPowerOfTwoInt(targetW);
-
-            cout << endl << "target height = " << targetH << endl << "target width = " << targetW;
+            // next power of two >= target
+            auto nextPower = [](int n){
+                if (n <= 1) return 1;
+                int p = 1;
+                while (p < n) p <<= 1;
+                return p;
+            };
+            targetH = nextPower(targetH);
+            targetW = nextPower(targetW);
         }
 
         ComplexMatrix out(targetH, std::vector<Complex>(targetW, Complex(0.0, 0.0)));
 
+        // copy source into top-left corner (0,0)
         const auto &mat = source.getMatrix();
         for (int y = 0; y < sourceH; ++y)
             for (int x = 0; x < sourceW; ++x)
