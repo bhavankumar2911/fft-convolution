@@ -1,0 +1,4 @@
+compile main code 
+clang++ -std=c++20 Main.cpp -o Main -I /opt/homebrew/include -L /opt/homebrew/lib -larmadillo -lfftw3 -lm -O2
+run main code 
+./Main ./test/images 20 20 ./test/kernels 3 3 full 1
