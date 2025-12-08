@@ -1,7 +1,7 @@
 // main_compare_cpu_gpu_double.cpp
 #include "../Data2D.hpp"
 #include "../NaiveConvolution.hpp"
-#include "NaiveConvolution2D_CUDA.cu" // include CUDA TU so nvcc compiles it together
+#include "NaiveConvolution2D_CUDA.hpp" // include CUDA TU so nvcc compiles it together
 
 #include <iostream>
 #include <string>

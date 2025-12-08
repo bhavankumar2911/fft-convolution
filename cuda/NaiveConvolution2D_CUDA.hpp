@@ -1,9 +1,12 @@
-// NaiveConvolution2D_CUDA.cu
+#ifndef NAIVE_CONVOLUTION2D_CUDA_HPP
+#define NAIVE_CONVOLUTION2D_CUDA_HPP
+
 #include <cuda_runtime.h>
 #include <stdexcept>
 #include <string>
 #include <iostream>
 #include <chrono>
+#include <type_traits>
 #include "../Data2D.hpp"
 
 inline void checkCuda(cudaError_t e, const char* where = "")
@@ -34,7 +37,6 @@ __global__ void naiveConvolutionKernelGeneric(
 
     if (mode == MODE_VALID)
     {
-        // base maps output (oy,ox) to image (baseY + ky, baseX + kx)
         int baseY = oy;
         int baseX = ox;
         for (int ky = 0; ky < kernelH; ++ky)
@@ -50,7 +52,6 @@ __global__ void naiveConvolutionKernelGeneric(
     }
     else if (mode == MODE_FULL)
     {
-        // full: output range [0 .. imageH+kernelH-2], mapping iy = y - ky
         for (int ky = 0; ky < kernelH; ++ky)
         {
             int kRowIdx = ky * kernelW;
@@ -65,7 +66,6 @@ __global__ void naiveConvolutionKernelGeneric(
     }
     else // MODE_SAME
     {
-        // same: output has same dims as image; use zero padding where necessary
         int kyCenter = kernelH / 2;
         int kxCenter = kernelW / 2;
         for (int ky = 0; ky < kernelH; ++ky)
@@ -141,7 +141,6 @@ public:
 
         Data2D<T> result(outH, outW);
 
-        // allocate device memory
         size_t imageBytes = static_cast<size_t>(imageH_) * imageW_ * sizeof(T);
         size_t kernelBytes = static_cast<size_t>(kernelH_) * kernelW_ * sizeof(T);
         size_t outBytes = static_cast<size_t>(outH) * outW * sizeof(T);
@@ -151,15 +150,12 @@ public:
         checkCuda(cudaMalloc(reinterpret_cast<void**>(&d_kernel), kernelBytes), "cudaMalloc d_kernel");
         checkCuda(cudaMalloc(reinterpret_cast<void**>(&d_output), outBytes), "cudaMalloc d_output");
 
-        // copy host -> device
         checkCuda(cudaMemcpy(d_image, imageHost_.data().data(), imageBytes, cudaMemcpyHostToDevice), "H2D image");
         checkCuda(cudaMemcpy(d_kernel, kernelHost_.data().data(), kernelBytes, cudaMemcpyHostToDevice), "H2D kernel");
 
-        // choose block/grid
         dim3 block(16, 16);
         dim3 grid((outW + block.x - 1) / block.x, (outH + block.y - 1) / block.y);
 
-        // timing: kernel-only time measured by cudaEvent
         cudaEvent_t startEvent, stopEvent;
         checkCuda(cudaEventCreate(&startEvent), "createEvent start");
         checkCuda(cudaEventCreate(&stopEvent), "createEvent stop");
@@ -177,10 +173,8 @@ public:
         float ms = 0.0f;
         checkCuda(cudaEventElapsedTime(&ms, startEvent, stopEvent), "elapsedTime");
 
-        // copy result back
         checkCuda(cudaMemcpy(result.data().data(), d_output, outBytes, cudaMemcpyDeviceToHost), "D2H output");
 
-        // cleanup
         checkCuda(cudaFree(d_image), "free d_image");
         checkCuda(cudaFree(d_kernel), "free d_kernel");
         checkCuda(cudaFree(d_output), "free d_output");
@@ -190,3 +184,5 @@ public:
         return ConvolutionResult{ result, static_cast<double>(ms) };
     }
 };
+
+#endif // NAIVE_CONVOLUTION2D_CUDA_HPP

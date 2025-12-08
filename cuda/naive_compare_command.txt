@@ -1,1 +1,1 @@
-nvcc -O3 -std=c++14 -arch=native -o compare_cpu_gpu_double naiveCpuGpu.cpp NaiveConvolution2D_CUDA.cu
+nvcc -O3 -std=c++14 -arch=sm_75 -o compare_cpu_gpu_double naiveCpuGpu.cu
