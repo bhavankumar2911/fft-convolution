@@ -9,17 +9,18 @@
 #include <iomanip>
 #include <vector>
 #include <exception>
+#include <map>
+#include <fstream>
+#include <sstream>
 
 using namespace std;
 
 // ----------------- Configuration -----------------
-static const string IMAGE_FOLDER   = "./test/images";
-static const string KERNEL_FOLDER  = "./test/kernels";
+static const string IMAGE_FOLDER        = "./test/images";
+static const string KERNEL_FOLDER       = "./test/kernels";
+static const string RESULTS_CSV_FILE    = "convolution_results.csv";
 
-const vector<int> IMAGE_SIZES  = {5, 20, 96, 256, 500};
-const vector<int> KERNEL_SIZES = {3, 7, 9, 11, 15};
-
-static const string OUTPUT_MODE   = "same";  // "full" | "same" | "valid"
+static const string OUTPUT_MODE   = "valid";  // "full" | "same" | "valid"
 static const bool   USE_NEXT_POW2 = true;
 static const bool   PRINT_DIFF    = false;
 // -------------------------------------------------
@@ -40,7 +41,7 @@ int main()
          << "   padToNextPow2=" << (USE_NEXT_POW2 ? "true" : "false") << "\n";
     cout << "Print diff?    " << (PRINT_DIFF ? "yes" : "no") << "\n\n";
 
-    // Header formatting
+    // Header formatting for console
     const int W1 = 14, W2 = 12, W3 = 8, W4 = 6, W5 = 12, W6 = 12, W7 = 12, W8 = 16;
 
     cout << left
@@ -56,15 +57,58 @@ int main()
 
     cout << string(W1+W2+W3+W4+W5+W6+W7+W8, '-') << "\n";
 
-    // Loop through valid combinations (kernel < image)
-    for (int imgSize : IMAGE_SIZES)
-    {
-        for (int kerSize : KERNEL_SIZES)
-        {
-            if (kerSize >= imgSize)
-                continue;  // <<--- ONLY VALID COMBINATIONS PRINTED
+    // Map: image size -> list of kernel sizes (user-provided experiment set)
+    map<int, vector<int>> imageKernelMap = {
+        {256,  {3,   7,  21,  51, 101}},
+        {512,  {5,  11,  31, 101, 151}},
+        {1024, {11, 31, 101, 201, 301}},
+        {2048, {21, 51, 151, 301, 501}}
+    };
 
-            string imageLabel  = to_string(imgSize) + "x" + to_string(imgSize);
+    // Open CSV file and write header
+    ofstream csvOut(RESULTS_CSV_FILE);
+    if (!csvOut.is_open()) {
+        cerr << "ERROR: could not open CSV file '" << RESULTS_CSV_FILE << "' for writing\n";
+        return 1;
+    }
+
+    // CSV header
+    csvOut << "Image,Kernel,Mode,Pow2,Naive(ms),FFT(ms),Faster,AbsDiffSum\n";
+
+    // Iterate map and run comparisons for each valid combination
+    for (const auto &entry : imageKernelMap)
+    {
+        int imgSize = entry.first;
+        const vector<int> &kernelsForImage = entry.second;
+
+        string imageLabelBase = to_string(imgSize) + "x" + to_string(imgSize);
+
+        for (int kerSize : kernelsForImage)
+        {
+            // sanity check (skip invalid combinations where kernel >= image)
+            if (kerSize >= imgSize) {
+                // Console print
+                cout << left
+                     << setw(W1) << imageLabelBase
+                     << setw(W2) << (to_string(kerSize) + "x" + to_string(kerSize))
+                     << setw(W3) << OUTPUT_MODE
+                     << setw(W4) << (USE_NEXT_POW2 ? "1":"0")
+                     << setw(W5) << "N/A"
+                     << setw(W6) << "N/A"
+                     << setw(W7) << "N/A"
+                     << setw(W8) << "kernel>=image"
+                     << "\n";
+
+                // CSV write
+                csvOut << imageLabelBase << ","
+                       << to_string(kerSize) + "x" + to_string(kerSize) << ","
+                       << OUTPUT_MODE << ","
+                       << (USE_NEXT_POW2 ? "1" : "0") << ","
+                       << "N/A,N/A,N/A,kernel>=image\n";
+                continue;
+            }
+
+            string imageLabel  = imageLabelBase;
             string kernelLabel = to_string(kerSize) + "x" + to_string(kerSize);
 
             Data2D image, kernel;
@@ -98,6 +142,17 @@ int main()
                      << setw(W7) << "ERR"
                      << setw(W8) << errMsg
                      << "\n";
+
+                // CSV write error row
+                // Escape commas in errMsg by replacing them with ';' for CSV simplicity
+                string csvErrMsg = errMsg;
+                for (char &c : csvErrMsg) if (c == ',') c = ';';
+
+                csvOut << imageLabel << ","
+                       << kernelLabel << ","
+                       << OUTPUT_MODE << ","
+                       << (USE_NEXT_POW2 ? "1" : "0") << ","
+                       << "ERR,ERR,ERR," << csvErrMsg << "\n";
                 continue;
             }
 
@@ -105,7 +160,7 @@ int main()
             NaiveConvolution2D naiveConv(image.getMatrix(), kernel.getMatrix());
             auto naiveResult = naiveConv.computeConvolution(OUTPUT_MODE);
 
-            // Run FFT conv
+            // Run FFT conv (using correlation mode as before)
             auto fftResult = FftConvolver::convolve(
                 image,
                 kernel,
@@ -114,7 +169,7 @@ int main()
                 USE_NEXT_POW2
             );
 
-            // Sum abs diff
+            // Sum absolute difference
             double absSum = 0.0;
             bool sumOk = true;
             try {
@@ -133,7 +188,7 @@ int main()
             else if (fftResult.elapsedMilliseconds > naiveResult.elapsedMilliseconds)
                 faster = "Naive";
 
-            // Print ONLY valid comparison rows
+            // Console print
             cout << left
                  << setw(W1) << imageLabel
                  << setw(W2) << kernelLabel
@@ -144,6 +199,37 @@ int main()
                  << setw(W7) << faster
                  << setw(W8) << (sumOk ? to_string(absSum) : string("dim-mismatch"))
                  << "\n";
+
+            // CSV row: ensure formatting matches console (fixed, 6 decimals)
+            ostringstream cellFormatter;
+            cellFormatter << fixed << setprecision(6);
+
+            string naiveStr, fftStr, absSumStr;
+            cellFormatter.str(""); cellFormatter.clear();
+            cellFormatter << naiveResult.elapsedMilliseconds;
+            naiveStr = cellFormatter.str();
+
+            cellFormatter.str(""); cellFormatter.clear();
+            cellFormatter << fftResult.elapsedMilliseconds;
+            fftStr = cellFormatter.str();
+
+            if (sumOk) {
+                cellFormatter.str(""); cellFormatter.clear();
+                cellFormatter << absSum;
+                absSumStr = cellFormatter.str();
+            } else {
+                absSumStr = "dim-mismatch";
+            }
+
+            // Write CSV (no extra quoting; values are simple)
+            csvOut << imageLabel << ","
+                   << kernelLabel << ","
+                   << OUTPUT_MODE << ","
+                   << (USE_NEXT_POW2 ? "1" : "0") << ","
+                   << naiveStr << ","
+                   << fftStr << ","
+                   << faster << ","
+                   << absSumStr << "\n";
 
             if (PRINT_DIFF)
             {
@@ -158,9 +244,11 @@ int main()
                 }
                 cout << "\n";
             }
-        }
-    }
+        } // end kernels loop
+    } // end map loop
 
+    csvOut.close();
+    cout << "\nCSV results written to '" << RESULTS_CSV_FILE << "'\n";
     cout << "\n=== Fixed-size batch comparison complete ===\n";
     return 0;
 }
