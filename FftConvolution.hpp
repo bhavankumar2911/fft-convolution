@@ -26,11 +26,12 @@ public:
     // outputMode: "full" | "same" | "valid"
     // operationMode: Convolution (mathematical) or Correlation (CNN-style)
     // padToNextPowerOfTwo: pad FFT sizes to next power of two for performance
+    // replace existing convolve with this (top-left extraction semantics)
     static ConvolutionResult convolve(const Data2D &image,
-                                      const Data2D &kernel,
-                                      const std::string &outputMode = "full",
-                                      OperationMode operationMode = OperationMode::Convolution,
-                                      bool padToNextPowerOfTwo = true)
+                                    const Data2D &kernel,
+                                    const std::string &outputMode = "full",
+                                    OperationMode operationMode = OperationMode::Correlation, // correlation by default
+                                    bool padToNextPowerOfTwo = false) // recommend false for debugging
     {
         int imageH = image.getHeight();
         int imageW = image.getWidth();
@@ -50,20 +51,18 @@ public:
 
         auto tStart = std::chrono::high_resolution_clock::now();
 
-        ComplexMatrix fftImage  = Fft2DTransformer::compute2D(image, minHeight, minWidth, true, padToNextPowerOfTwo);
-        ComplexMatrix fftKernel = Fft2DTransformer::compute2D(kernel, minHeight, minWidth, true, padToNextPowerOfTwo);
+        // build padded matrices with top-left placement
+        ComplexMatrix fftImage  = Fft2DTransformer::compute2D(image,  minHeight, minWidth, true,  padToNextPowerOfTwo);
+        ComplexMatrix fftKernel = Fft2DTransformer::compute2D(kernel, minHeight, minWidth, true,  padToNextPowerOfTwo);
 
-        cout << "=== FFT Convolve debug ===\n";
-        cout << "imageH,imageW = " << imageH << "," << imageW << "\n";
-        cout << "kernelH,kernelW = " << kernelH << "," << kernelW << "\n";
-        cout << "convH,convW = " << convH << "," << convW << "\n";
-        cout << "paddedH,paddedW = " << fftImage.size() << "," << fftImage[0].size() << "\n";
-        cout << "operationMode = " << (operationMode==OperationMode::Correlation ? "Correlation" : "Convolution") << "\n";
+        // multiply: for correlation use conj(kernel)
+        bool useConj = (operationMode == OperationMode::Correlation);
+        multiplyInPlace(fftImage, fftKernel, useConj);
 
-        multiplyInPlace(fftImage, fftKernel, operationMode == OperationMode::Correlation);
-
+        // inverse 2D in place
         Fft2DTransformer::inverse2DInPlace(fftImage);
 
+        // extract result using top-left semantics (see buildOutputFromPadded below)
         Data2D output = buildOutputFromPadded(fftImage, imageH, imageW, kernelH, kernelW, outputMode);
 
         auto tEnd = std::chrono::high_resolution_clock::now();
@@ -84,20 +83,19 @@ private:
 
         if (!useConjugateOfB)
         {
-            cout << "not using conj";
             for (int y = 0; y < h; ++y)
                 for (int x = 0; x < w; ++x)
                     a[y][x] *= b[y][x];
         }
         else
         {
-            cout << "using conj";
             for (int y = 0; y < h; ++y)
                 for (int x = 0; x < w; ++x)
                     a[y][x] *= std::conj(b[y][x]);
         }
     }
 
+    // replace existing buildOutputFromPadded with this
     static Data2D buildOutputFromPadded(const ComplexMatrix &padded,
                                         int imageH, int imageW,
                                         int kernelH, int kernelW,
@@ -113,6 +111,9 @@ private:
         if (paddedH < convH || paddedW < convW)
             throw std::runtime_error("buildOutputFromPadded: padded size smaller than convolution size");
 
+        // Note: with top-left anchor semantics the linear cross-correlation / convolution result
+        // occupies the top-left convH x convW region of the padded IFFT matrix.
+
         if (outputMode == "full")
         {
             Data2D out(convH, convW);
@@ -123,42 +124,27 @@ private:
         }
         else if (outputMode == "same")
         {
-            int offsetY = (convH - imageH) / 2;
-            int offsetX = (convW - imageW) / 2;
-            if (offsetY < 0) offsetY = 0;
-            if (offsetX < 0) offsetX = 0;
-
-            if (offsetY + imageH > convH || offsetX + imageW > convW)
-                throw std::runtime_error("buildOutputFromPadded: same crop window out of range");
-
             Data2D out(imageH, imageW);
             for (int y = 0; y < imageH; ++y)
                 for (int x = 0; x < imageW; ++x)
-                    out.getMatrix()[y][x] = padded[y + offsetY][x + offsetX].real();
+                    out.getMatrix()[y][x] = padded[y][x].real();
             return out;
         }
         else if (outputMode == "valid")
         {
             int outH = imageH - kernelH + 1;
             int outW = imageW - kernelW + 1;
-            if (outH <= 0 || outW <= 0)
-                return Data2D();
-
-            int startRow = kernelH - 1;
-            int startCol = kernelW - 1;
-
-            if (startRow + outH > convH || startCol + outW > convW)
-                throw std::runtime_error("buildOutputFromPadded: valid crop window out of range");
+            if (outH <= 0 || outW <= 0) return Data2D();
 
             Data2D out(outH, outW);
             for (int y = 0; y < outH; ++y)
                 for (int x = 0; x < outW; ++x)
-                    out.getMatrix()[y][x] = padded[y + startRow][x + startCol].real();
+                    out.getMatrix()[y][x] = padded[y][x].real();
             return out;
         }
         else
         {
-            throw std::invalid_argument("buildOutputFromPadded: unknown outputMode (use 'full','same' or 'valid')");
+            throw std::invalid_argument("buildOutputFromPadded: unknown outputMode");
         }
     }
 };
