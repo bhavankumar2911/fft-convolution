@@ -15,12 +15,15 @@
 
 using namespace std;
 
-// ----------------- Configuration -----------------
-static const string IMAGE_FOLDER        = "./test/images";
-static const string KERNEL_FOLDER       = "./test/kernels";
-static const string RESULTS_CSV_FILE    = "convolution_results.csv";
+// choose float or double here
+using T = float;
 
-static const string OUTPUT_MODE   = "valid";  // "full" | "same" | "valid"
+// ----------------- Configuration -----------------
+static const string IMAGE_FOLDER        = "./test/images/float";
+static const string KERNEL_FOLDER       = "./test/kernels/float";
+static const string RESULTS_CSV_FILE    = "convolution_results_single_float.csv";
+
+static const string OUTPUT_MODE   = "same";  // "full" | "same" | "valid"
 static const bool   USE_NEXT_POW2 = true;
 static const bool   PRINT_DIFF    = false;
 // -------------------------------------------------
@@ -111,7 +114,8 @@ int main()
             string imageLabel  = imageLabelBase;
             string kernelLabel = to_string(kerSize) + "x" + to_string(kerSize);
 
-            Data2D image, kernel;
+            Data2D<T> image;
+            Data2D<T> kernel;
             bool ok = true;
             string errMsg;
 
@@ -144,7 +148,6 @@ int main()
                      << "\n";
 
                 // CSV write error row
-                // Escape commas in errMsg by replacing them with ';' for CSV simplicity
                 string csvErrMsg = errMsg;
                 for (char &c : csvErrMsg) if (c == ',') c = ';';
 
@@ -156,26 +159,26 @@ int main()
                 continue;
             }
 
-            // Run naive conv
-            NaiveConvolution2D naiveConv(image.getMatrix(), kernel.getMatrix());
+            // Run naive conv (templated NaiveConvolution2D<T>)
+            NaiveConvolution2D<T> naiveConv(image, kernel);
             auto naiveResult = naiveConv.computeConvolution(OUTPUT_MODE);
 
-            // Run FFT conv (using correlation mode as before)
-            auto fftResult = FftConvolver::convolve(
+            // Run FFT conv (templated FftConvolver<T>)
+            auto fftResult = FftConvolver<T>::convolve(
                 image,
                 kernel,
                 OUTPUT_MODE,
-                FftConvolver::OperationMode::Correlation,
+                FftConvolver<T>::OperationMode::Correlation,
                 USE_NEXT_POW2
             );
 
-            // Sum absolute difference
-            double absSum = 0.0;
+            // Sum absolute difference using templated Data2D<T>
+            T absSum = static_cast<T>(0);
             bool sumOk = true;
             try {
-                absSum = Data2D::sumAbsoluteDifference(
-                    naiveResult.resultMatrix,
-                    fftResult.resultMatrix.getMatrix()
+                absSum = Data2D<T>::sumAbsoluteDifference(
+                    naiveResult.result,
+                    fftResult.resultMatrix
                 );
             } catch (...) {
                 sumOk = false;
@@ -234,14 +237,7 @@ int main()
             if (PRINT_DIFF)
             {
                 cout << "\nAbsolute difference matrix (" << imageLabel << " vs " << kernelLabel << "):\n";
-                try {
-                    Data2D::printAbsoluteDifference(
-                        naiveResult.resultMatrix,
-                        fftResult.resultMatrix.getMatrix()
-                    );
-                } catch (const exception &e) {
-                    cout << "Could not print diff matrix: " << e.what() << "\n";
-                }
+                Data2D<T>::printAbsoluteDifferenceMatrix(naiveResult.result, fftResult.resultMatrix);
                 cout << "\n";
             }
         } // end kernels loop

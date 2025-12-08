@@ -9,6 +9,9 @@
 using namespace std;
 namespace fs = filesystem;
 
+// Choose data type here:
+using T = float;
+
 static void printUsage(const char* prog)
 {
     cout << "Usage: " << prog << " [height] [width] [folderPath]\n"
@@ -25,20 +28,18 @@ public:
         if (height <= 0 || width <= 0)
             throw runtime_error("Height and width must be positive integers");
 
-        // ensure folder exists
         if (!fs::exists(folderPath))
         {
             if (!fs::create_directories(folderPath))
                 throw runtime_error("Failed to create data folder: " + folderPath);
         }
 
-        // prepare data (single unified matrix)
-        Data2D original(height, width);
+        Data2D<T> original(height, width);
         original.fillRandom();
 
-        // save to binary (uses automatic filename pattern data<height>x<width>.bin)
         auto t0 = chrono::high_resolution_clock::now();
-        original.saveToBinary(folderPath, height, width);
+        // Data2D<T>::saveToBinary takes only folderPath in this API
+        original.saveToBinary(folderPath);
         auto t1 = chrono::high_resolution_clock::now();
         chrono::duration<double, milli> saveTime = t1 - t0;
 
@@ -46,8 +47,7 @@ public:
              << fixed << setprecision(3)
              << saveTime.count() << " ms\n";
 
-        // load into a fresh object (demonstrates other classes/programs can call load)
-        Data2D loaded; // default construct and let loadFromBinary resize
+        Data2D<T> loaded; // default construct and let loadFromBinary resize
         t0 = chrono::high_resolution_clock::now();
         loaded.loadFromBinary(folderPath, height, width);
         t1 = chrono::high_resolution_clock::now();
@@ -64,31 +64,31 @@ public:
     }
 
 private:
-    static bool verify(const Data2D& a, const Data2D& b)
+    static bool verify(const Data2D<T>& a, const Data2D<T>& b)
     {
-        const double epsilon = 1e-12;
+        // tolerance scaled with type
+        const long double eps_base = std::is_same<T, float>::value ? 1e-6L : 1e-12L;
+        long double epsilon = eps_base;
 
-        const auto& matA = a.getMatrix();
-        const auto& matB = b.getMatrix();
-
-        int h = a.getHeight();
-        int w = a.getWidth();
-
-        if (h != b.getHeight() || w != b.getWidth())
+        if (a.getHeight() != b.getHeight() || a.getWidth() != b.getWidth())
             return false;
 
-        for (int y = 0; y < h; ++y)
-            for (int x = 0; x < w; ++x)
-                if (fabs(matA[y][x] - matB[y][x]) > epsilon)
-                    return false;
+        const size_t n = static_cast<size_t>(a.getHeight()) * static_cast<size_t>(a.getWidth());
+        const T* pa = a.data().data();
+        const T* pb = b.data().data();
 
+        for (size_t i = 0; i < n; ++i)
+        {
+            long double da = static_cast<long double>(pa[i]);
+            long double db = static_cast<long double>(pb[i]);
+            if (fabsl(da - db) > epsilon) return false;
+        }
         return true;
     }
 };
 
 int main(int argc, char** argv)
 {
-    // defaults
     int height = 15;
     int width  = 15;
     string folder = "./kernels";
