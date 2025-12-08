@@ -4,7 +4,7 @@
 #include <string>
 #include <iostream>
 #include <chrono>
-#include "Data2D.hpp"
+#include "../Data2D.hpp"
 
 inline void checkCuda(cudaError_t e, const char* where = "")
 {
