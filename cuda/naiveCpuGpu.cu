@@ -20,7 +20,7 @@ static const string IMAGE_FOLDER        = "../test/images/double";
 static const string KERNEL_FOLDER       = "../test/kernels/double";
 static const string RESULTS_CSV_FILE    = "convolution_results_cpu_vs_gpu_double.csv";
 
-static const string OUTPUT_MODE   = "same";  // "full" | "same" | "valid"
+static const string OUTPUT_MODE   = "valid";  // "full" | "same" | "valid"
 static const bool   PRINT_DIFF    = false;
 // -------------------------------------------------
 
