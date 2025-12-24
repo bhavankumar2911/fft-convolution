@@ -16,14 +16,14 @@
 using namespace std;
 
 // choose float or double here
-using T = float;
+using T = double;
 
 // ----------------- Configuration -----------------
-static const string IMAGE_FOLDER        = "./test/images/float";
-static const string KERNEL_FOLDER       = "./test/kernels/float";
-static const string RESULTS_CSV_FILE    = "convolution_results_single_float.csv";
+static const string IMAGE_FOLDER        = "./test/images/double";
+static const string KERNEL_FOLDER       = "./test/kernels/double";
+static const string RESULTS_CSV_FILE    = "convolution_results_single_double.csv";
 
-static const string OUTPUT_MODE   = "same";  // "full" | "same" | "valid"
+static const string OUTPUT_MODE   = "valid";  // "full" | "same" | "valid"
 static const bool   USE_NEXT_POW2 = true;
 static const bool   PRINT_DIFF    = false;
 // -------------------------------------------------

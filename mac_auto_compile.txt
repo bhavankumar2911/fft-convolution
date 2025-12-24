@@ -1,1 +1,1 @@
-clang++ -std=c++20 Auto.cpp -o AutoFloatMac -O3 -ffast-math -march=native -funroll-loops -flto
+clang++ -std=c++20 Auto.cpp -o AutoDoubleMac -O3 -ffast-math -march=native -funroll-loops -flto
