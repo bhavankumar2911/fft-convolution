@@ -7,7 +7,7 @@ def read_bin_vector(path, dtype):
     return np.fromfile(path, dtype=dtype)
 
 
-def compare_vectors_verbose(a, b, top_k):
+def compare_vectors(a, b):
     diff = a - b
     abs_diff = np.abs(diff)
 
@@ -19,15 +19,11 @@ def compare_vectors_verbose(a, b, top_k):
         (np.linalg.norm(a) + 1e-12)
     )
 
-    worst_indices = np.argsort(abs_diff)[-top_k:][::-1]
-
     return (
         max_abs_error,
         mean_abs_error,
         sum_abs_error,
-        l2_relative_error,
-        worst_indices,
-        abs_diff
+        l2_relative_error
     )
 
 
@@ -36,8 +32,7 @@ def compare_directories(
     dir_b,
     dtype,
     atol,
-    rtol,
-    top_k
+    rtol
 ):
     files = sorted(
         f for f in os.listdir(dir_a)
@@ -59,14 +54,7 @@ def compare_directories(
                 f"Size mismatch for {filename}: {a.size} vs {b.size}"
             )
 
-        (
-            max_err,
-            mean_err,
-            sum_err,
-            rel_err,
-            worst_indices,
-            abs_diff
-        ) = compare_vectors_verbose(a, b, top_k)
+        max_err, mean_err, sum_err, rel_err = compare_vectors(a, b)
 
         passed = (max_err <= atol) or (rel_err <= rtol)
         status = "PASS" if passed else "FAIL"
@@ -77,15 +65,6 @@ def compare_directories(
         print(f"Mean abs error     : {mean_err:.10e}")
         print(f"Sum abs error      : {sum_err:.10e}")
         print(f"Relative L2 error  : {rel_err:.10e}")
-
-        print("\nTop differing elements:")
-        for idx in worst_indices:
-            print(
-                f"  index {idx:8d} | "
-                f"A = {a[idx]!r} | "
-                f"B = {b[idx]!r} | "
-                f"|Δ| = {abs_diff[idx]!r}"
-            )
 
 
 if __name__ == "__main__":
@@ -100,7 +79,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--atol", type=float, default=1e-4)
     parser.add_argument("--rtol", type=float, default=1e-4)
-    parser.add_argument("--top_k", type=int, default=10)
 
     args = parser.parse_args()
 
@@ -114,6 +92,5 @@ if __name__ == "__main__":
         dir_b=args.dir_b,
         dtype=dtype_map[args.dtype],
         atol=args.atol,
-        rtol=args.rtol,
-        top_k=args.top_k
+        rtol=args.rtol
     )

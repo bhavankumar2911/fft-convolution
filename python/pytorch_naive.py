@@ -58,12 +58,6 @@ def perform_cross_correlation(
             .unsqueeze(0)
         )
 
-        image_output_dir = os.path.join(
-            output_parent_directory,
-            f"{image_size}x{image_size}"
-        )
-        os.makedirs(image_output_dir, exist_ok=True)
-
         for kernel_size in kernel_sizes:
             kernel_path = os.path.join(
                 kernels_directory,
@@ -104,8 +98,10 @@ def perform_cross_correlation(
             )
 
             output_path = os.path.join(
-                image_output_dir,
-                f"{kernel_size}x{kernel_size}_{padding_mode}.bin"
+                output_parent_directory,
+                f"{image_size}x{image_size}_"
+                f"{kernel_size}x{kernel_size}_"
+                f"{padding_mode}.bin"
             )
 
             save_bin_matrix(output_path, output_matrix)
@@ -153,8 +149,8 @@ if __name__ == "__main__":
     }
 
     image_kernel_size_map = {
-        # 256:  [3,   7,   21,  51,  101],
-        # 512:  [5,   11,  31,  101, 151],
+        256:  [3,   7,   21,  51,  101],
+        512:  [5,   11,  31,  101, 151],
         1024: [11,  31,  101, 201, 301],
         2048: [21,  51,  151, 301, 501]
     }
