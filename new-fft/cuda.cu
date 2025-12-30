@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <fstream>
+#include <chrono>
 
 namespace fs = std::filesystem;
 
@@ -19,10 +21,11 @@ PaddingMode parsePaddingMode(const std::string& mode)
 
 int main(int argc, char** argv)
 {
-    std::string inputDir   = "../python/data";
-    std::string outputDir  = "./fft_cuda_outputs_cuda";
-    std::string dtypeStr   = "float32";
+    std::string inputDir   = "../python/data64";
+    std::string outputDir  = "./fft_cuda_outputs";
+    std::string dtypeStr   = "float64";
     std::string paddingStr = "same";
+    std::string csvPath    = "./gpu_fft_results.csv";
 
     for (int i = 1; i < argc; ++i)
     {
@@ -31,6 +34,7 @@ int main(int argc, char** argv)
         else if (arg == "--output_dir") outputDir = argv[++i];
         else if (arg == "--dtype") dtypeStr = argv[++i];
         else if (arg == "--padding_mode") paddingStr = argv[++i];
+        else if (arg == "--csv_path") csvPath = argv[++i];
     }
 
     PaddingMode paddingMode = parsePaddingMode(paddingStr);
@@ -43,6 +47,19 @@ int main(int argc, char** argv)
     };
 
     fs::create_directories(outputDir);
+
+    bool csvExists = fs::exists(csvPath);
+    std::ofstream csvFile(csvPath, std::ios::app);
+
+    if (!csvExists)
+    {
+        csvFile
+            << "image_size,"
+            << "kernel_size,"
+            << "padding_mode,"
+            << "dtype,"
+            << "operation_time_ms\n";
+    }
 
     auto run = [&](auto dummy)
     {
@@ -66,12 +83,23 @@ int main(int argc, char** argv)
                     std::to_string(kernelSize) + ".bin"
                 );
 
+                auto startTime =
+                    std::chrono::high_resolution_clock::now();
+
                 Matrix2D<T> output =
-                    FFTCrossCorrelation2D::compute(
+                    FFTCrossCorrelation2D_CUDA::compute(
                         image,
                         kernel,
                         paddingMode
                     );
+
+                auto endTime =
+                    std::chrono::high_resolution_clock::now();
+
+                double operationTimeMs =
+                    std::chrono::duration<double, std::milli>(
+                        endTime - startTime
+                    ).count();
 
                 fs::path outputPath =
                     fs::path(outputDir) /
@@ -83,12 +111,18 @@ int main(int argc, char** argv)
 
                 output.writeToBinaryFile(outputPath.string());
 
+                csvFile
+                    << imageSize << ","
+                    << kernelSize << ","
+                    << paddingStr << ","
+                    << dtypeStr << ","
+                    << operationTimeMs << "\n";
+
                 std::cout
                     << "Saved: image=" << imageSize
                     << ", kernel=" << kernelSize
                     << ", mode=" << paddingStr
-                    << ", shape=" << output.rows()
-                    << "x" << output.cols()
+                    << ", time=" << operationTimeMs << " ms"
                     << std::endl;
             }
         }
@@ -97,6 +131,8 @@ int main(int argc, char** argv)
     if (dtypeStr == "float64") run(double{});
     else throw std::runtime_error("CUDA FFT supports float64 only");
 
-    std::cout << "CUDA FFT cross-correlation generation completed\n";
+    csvFile.close();
+
+    std::cout << "CUDA FFT cross-correlation timing completed\n";
     return 0;
 }

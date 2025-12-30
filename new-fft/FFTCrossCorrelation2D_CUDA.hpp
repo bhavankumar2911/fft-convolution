@@ -32,7 +32,7 @@ __global__ void multiplyWithConjugate(
 
 /* ================= FFT Cross-Correlation (CUDA) ================= */
 
-class FFTCrossCorrelation2D
+class FFTCrossCorrelation2D_CUDA
 {
 public:
     template<typename T>

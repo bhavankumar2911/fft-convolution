@@ -1,0 +1,1 @@
+nvcc -O3 -lcufft cuda.cu -o cuda
