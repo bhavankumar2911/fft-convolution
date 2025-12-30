@@ -119,13 +119,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--input_dir",
         type=str,
-        default="./data",
+        default="./data64",
         help="Directory containing images/ and kernels/"
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./naive_outputs",
+        default="./naive_outputs64",
         help="Directory where outputs will be saved"
     )
     parser.add_argument(

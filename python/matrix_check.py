@@ -61,16 +61,16 @@ def compare_directories(
 
         print(f"\n[{status}] {filename}")
         print(f"Elements           : {a.size}")
-        print(f"Max abs error      : {max_err:.10e}")
-        print(f"Mean abs error     : {mean_err:.10e}")
-        print(f"Sum abs error      : {sum_err:.10e}")
-        print(f"Relative L2 error  : {rel_err:.10e}")
+        print(f"Max abs error      : {max_err:.10f}")
+        print(f"Mean abs error     : {mean_err:.10f}")
+        print(f"Sum abs error      : {sum_err:.10f}")
+        print(f"Relative L2 error  : {rel_err:.12f}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir_a", type=str, required=True)
-    parser.add_argument("--dir_b", type=str, required=True)
+    parser.add_argument("--dir_a", type=str, default="./naive_outputs")
+    parser.add_argument("--dir_b", type=str, default="../new-fft/fft_outputs")
     parser.add_argument(
         "--dtype",
         type=str,

@@ -54,14 +54,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        required=True,
+        default="./naive_outputs64",
         help="Parent directory for images/ and kernels/"
     )
     parser.add_argument(
         "--dtype",
         type=str,
         choices=["float32", "float64"],
-        default="float32"
+        default="float64"
     )
     parser.add_argument(
         "--seed",
