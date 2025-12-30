@@ -69,13 +69,13 @@ def compare_directories(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir_a", type=str, default="./naive_outputs")
-    parser.add_argument("--dir_b", type=str, default="../new-fft/fft_outputs")
+    parser.add_argument("--dir_a", type=str, default="./naive_outputs64")
+    parser.add_argument("--dir_b", type=str, default="../new-fft/fft_cuda_outputs")
     parser.add_argument(
         "--dtype",
         type=str,
         choices=["float32", "float64"],
-        default="float32"
+        default="float64"
     )
     parser.add_argument("--atol", type=float, default=1e-4)
     parser.add_argument("--rtol", type=float, default=1e-4)

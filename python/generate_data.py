@@ -54,7 +54,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="./naive_outputs64",
+        default="./data64",
         help="Parent directory for images/ and kernels/"
     )
     parser.add_argument(
