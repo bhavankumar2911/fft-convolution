@@ -213,3 +213,11 @@ marimo/_lsp/
 __marimo__/
 
 python/stldata/
+python/naive_outputs/
+python/naive_outputs64/
+python/data/
+python/data64/
+
+new-fft/fft_cuda_outputs/
+new-fft/fft_outputs/
+new-fft/fft_outputs64/
