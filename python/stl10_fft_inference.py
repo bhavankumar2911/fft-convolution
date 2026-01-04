@@ -1,6 +1,11 @@
 import os
 import time
+import os
+import time
 import torch
+from torchvision import transforms
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
@@ -22,11 +27,16 @@ state = torch.load(
 
 # -----------------------------
 # FFT-based CNN
+# FFT-based CNN
 # -----------------------------
 class STL10_FFT_CNN(torch.nn.Module):
     def __init__(self, state):
         super().__init__()
 
+        self.conv1 = FFTConv2D(state["features.0.weight"], state["features.0.bias"])
+        self.conv2 = FFTConv2D(state["features.4.weight"], state["features.4.bias"])
+        self.conv3 = FFTConv2D(state["features.8.weight"], state["features.8.bias"])
+        self.conv4 = FFTConv2D(state["features.12.weight"], state["features.12.bias"])
         self.conv1 = FFTConv2D(state["features.0.weight"], state["features.0.bias"])
         self.conv2 = FFTConv2D(state["features.4.weight"], state["features.4.bias"])
         self.conv3 = FFTConv2D(state["features.8.weight"], state["features.8.bias"])
@@ -75,6 +85,26 @@ class SavedSTL10Dataset(Dataset):
 
 # -----------------------------
 # Transforms (same as training)
+# Custom Dataset (saved PNGs)
+# -----------------------------
+class SavedSTL10Dataset(Dataset):
+    def __init__(self, image_directory, transform):
+        self.image_directory = image_directory
+        self.transform = transform
+        self.image_files = sorted(os.listdir(image_directory))
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, index):
+        filename = self.image_files[index]
+        label = int(filename.split("_label_")[1].split(".")[0])
+        image = Image.open(os.path.join(self.image_directory, filename)).convert("RGB")
+        image = self.transform(image)
+        return image, label
+
+# -----------------------------
+# Transforms (same as training)
 # -----------------------------
 transform = transforms.Compose([
     transforms.ToTensor(),
@@ -85,11 +115,12 @@ transform = transforms.Compose([
 ])
 
 dataset = SavedSTL10Dataset(
-    image_directory="./stl10_test_first_100",
+    image_directory="./test_images",
     transform=transform
 )
 
 loader = DataLoader(
+    dataset,
     dataset,
     batch_size=1,
     shuffle=False,
