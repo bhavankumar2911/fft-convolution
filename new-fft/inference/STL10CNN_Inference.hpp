@@ -1,6 +1,8 @@
 #pragma once
 #include "Conv2D_FFT.hpp"
 #include "LinearLayer.hpp"
+#include "MaxPool2D.hpp"
+#include "Normalization.hpp"
 #include <algorithm>
 
 class STL10CNN_Inference
@@ -26,19 +28,63 @@ public:
         std::vector<Matrix2D<double>> x
     )
     {
-        x = c1.forward(x); for (auto& m : x) relu(m);
-        x = c2.forward(x); for (auto& m : x) relu(m);
-        x = c3.forward(x); for (auto& m : x) relu(m);
-        x = c4.forward(x); for (auto& m : x) relu(m);
+        /* -------- INPUT NORMALIZATION -------- */
+        Normalization::apply(x);
 
+        /* -------- CONV BLOCK 1 -------- */
+        x = c1.forward(x);
+        for (auto& m : x)
+        {
+            for (std::size_t y = 0; y < m.rows(); ++y)
+                for (std::size_t z = 0; z < m.cols(); ++z)
+                    m(y, z) = std::max(0.0, m(y, z));
+            m = MaxPool2D::apply(m);
+        }
+
+        /* -------- CONV BLOCK 2 -------- */
+        x = c2.forward(x);
+        for (auto& m : x)
+        {
+            for (std::size_t y = 0; y < m.rows(); ++y)
+                for (std::size_t z = 0; z < m.cols(); ++z)
+                    m(y, z) = std::max(0.0, m(y, z));
+            m = MaxPool2D::apply(m);
+        }
+
+        /* -------- CONV BLOCK 3 -------- */
+        x = c3.forward(x);
+        for (auto& m : x)
+        {
+            for (std::size_t y = 0; y < m.rows(); ++y)
+                for (std::size_t z = 0; z < m.cols(); ++z)
+                    m(y, z) = std::max(0.0, m(y, z));
+            m = MaxPool2D::apply(m);
+        }
+
+        /* -------- CONV BLOCK 4 -------- */
+        x = c4.forward(x);
+        for (auto& m : x)
+        {
+            for (std::size_t y = 0; y < m.rows(); ++y)
+                for (std::size_t z = 0; z < m.cols(); ++z)
+                    m(y, z) = std::max(0.0, m(y, z));
+            m = MaxPool2D::apply(m);
+        }
+
+        /* -------- FLATTEN -------- */
         std::vector<double> flat;
+        flat.reserve(256 * 6 * 6);
+
         for (const auto& c : x)
             for (std::size_t y = 0; y < c.rows(); ++y)
-                for (std::size_t x2 = 0; x2 < c.cols(); ++x2)
-                    flat.push_back(c(y, x2));
+                for (std::size_t z = 0; z < c.cols(); ++z)
+                    flat.push_back(c(y, z));
 
+        /* -------- FC -------- */
         auto h = f1.forward(flat);
-        for (auto& v : h) v = std::max(0.0, v);
+        for (auto& v : h)
+            v = std::max(0.0, v);
+
         return f2.forward(h);
     }
 };
