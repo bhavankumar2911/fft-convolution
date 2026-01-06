@@ -1,6 +1,6 @@
 #pragma once
-#include "Matrix2D.hpp"
-#include <cnpy.h>
+#include "../Matrix2D.hpp"
+#include "../cnpy/cnpy.h"
 #include <vector>
 #include <string>
 

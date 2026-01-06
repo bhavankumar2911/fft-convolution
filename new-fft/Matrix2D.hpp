@@ -19,6 +19,11 @@ private:
     std::vector<T> buffer;
 
 public:
+    /* -------- REQUIRED DEFAULT CONSTRUCTOR -------- */
+    Matrix2D()
+        : height(0), width(0), buffer() {}
+
+    /* -------- EXISTING CONSTRUCTOR -------- */
     Matrix2D(std::size_t rows, std::size_t cols)
         : height(rows), width(cols), buffer(rows * cols) {}
 
@@ -49,26 +54,34 @@ public:
     {
         std::ifstream file(path, std::ios::binary);
         if (!file)
-            throw std::runtime_error("Failed to open file for reading: " + path);
+            throw std::runtime_error(
+                "Failed to open file for reading: " + path
+            );
 
         file.read(reinterpret_cast<char*>(buffer.data()),
                   buffer.size() * sizeof(T));
 
         if (!file)
-            throw std::runtime_error("Binary read failed: " + path);
+            throw std::runtime_error(
+                "Binary read failed: " + path
+            );
     }
 
     void writeToBinaryFile(const std::string& path) const
     {
         std::ofstream file(path, std::ios::binary);
         if (!file)
-            throw std::runtime_error("Failed to open file for writing: " + path);
+            throw std::runtime_error(
+                "Failed to open file for writing: " + path
+            );
 
         file.write(reinterpret_cast<const char*>(buffer.data()),
                    buffer.size() * sizeof(T));
 
         if (!file)
-            throw std::runtime_error("Binary write failed: " + path);
+            throw std::runtime_error(
+                "Binary write failed: " + path
+            );
     }
 };
 

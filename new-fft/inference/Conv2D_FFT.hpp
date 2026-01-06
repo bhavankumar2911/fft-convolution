@@ -1,7 +1,7 @@
 #pragma once
-#include "Matrix2D.hpp"
+#include "../Matrix2D.hpp"
 #include "../FFTCrossCorrelation2D_CUDA.hpp"
-#include "PaddingMode.hpp"
+#include "../PaddingMode.hpp"
 #include <vector>
 
 class Conv2D_FFT
