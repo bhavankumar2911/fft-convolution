@@ -13,7 +13,7 @@ import os
 # --------------------------------------------------
 # Save model weights as raw float64 .bin files
 # --------------------------------------------------
-def save_model_weights_as_bin(
+def save_model_weights_as_bin_float64(
     model: nn.Module,
     output_dir: str
 ):
@@ -26,7 +26,7 @@ def save_model_weights_as_bin(
             param.detach()
             .cpu()
             .numpy()
-            .astype(np.float64, copy=False)
+            .astype(np.float64)
         )
 
         assert param_numpy.flags["C_CONTIGUOUS"]
@@ -69,21 +69,15 @@ def main():
     num_workers = 0
 
     csv_file = "training_stats.csv"
-    weights_bin_dir = "./trained_weights"
+    weights_bin_dir = "./weights_bin"
 
     # -----------------------------
-    # Force float64 globally
-    # -----------------------------
-    torch.set_default_dtype(torch.float64)
-
-    # -----------------------------
-    # Transforms
+    # Transforms (float32 ONLY)
     # -----------------------------
     transform_train = transforms.Compose([
         transforms.RandomCrop(96, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.ConvertImageDtype(torch.float64),
         transforms.Normalize(
             mean=[0.4467, 0.4398, 0.4066],
             std=[0.2241, 0.2215, 0.2239]
@@ -92,7 +86,6 @@ def main():
 
     transform_test = transforms.Compose([
         transforms.ToTensor(),
-        transforms.ConvertImageDtype(torch.float64),
         transforms.Normalize(
             mean=[0.4467, 0.4398, 0.4066],
             std=[0.2241, 0.2215, 0.2239]
@@ -131,32 +124,32 @@ def main():
     )
 
     # -----------------------------
-    # Model
+    # Model (float32 by design)
     # -----------------------------
     class STL10CNN(nn.Module):
         def __init__(self):
             super().__init__()
             self.features = nn.Sequential(
-                nn.Conv2d(3, 32, 5, padding=2, dtype=torch.float64),
+                nn.Conv2d(3, 32, 5, padding=2),
                 nn.ReLU(),
                 nn.MaxPool2d(2),
 
-                nn.Conv2d(32, 64, 5, padding=2, dtype=torch.float64),
+                nn.Conv2d(32, 64, 5, padding=2),
                 nn.ReLU(),
                 nn.MaxPool2d(2),
 
-                nn.Conv2d(64, 128, 3, padding=1, dtype=torch.float64),
+                nn.Conv2d(64, 128, 3, padding=1),
                 nn.ReLU(),
                 nn.MaxPool2d(2),
 
-                nn.Conv2d(128, 256, 3, padding=1, dtype=torch.float64),
+                nn.Conv2d(128, 256, 3, padding=1),
                 nn.ReLU(),
                 nn.MaxPool2d(2)
             )
             self.classifier = nn.Sequential(
-                nn.Linear(256 * 6 * 6, 512, dtype=torch.float64),
+                nn.Linear(256 * 6 * 6, 512),
                 nn.ReLU(),
-                nn.Linear(512, 10, dtype=torch.float64)
+                nn.Linear(512, 10)
             )
 
         def forward(self, x):
@@ -251,12 +244,12 @@ def main():
             ])
 
     # -----------------------------
-    # Save raw float64 weights
+    # Export float64 weights (CPU)
     # -----------------------------
     model_cpu = model.to("cpu")
     model_cpu.eval()
 
-    save_model_weights_as_bin(
+    save_model_weights_as_bin_float64(
         model=model_cpu,
         output_dir=weights_bin_dir
     )
@@ -264,17 +257,13 @@ def main():
     print(f"Saved float64 weights to: {weights_bin_dir}")
 
     # -----------------------------
-    # TorchScript Export (optional)
+    # TorchScript (optional)
     # -----------------------------
-    example_input = torch.randn(
-        1, 3, 96, 96,
-        dtype=torch.float64
-    )
-
+    example_input = torch.randn(1, 3, 96, 96)
     traced = torch.jit.trace(model_cpu, example_input)
     traced.save("stl10_cnn_same_stride1_cpu.pt")
 
-    print("Saved TorchScript model: stl10_cnn_same_stride1_cpu.pt")
+    print("Saved TorchScript model")
     print(f"Training stats saved to: {csv_file}")
 
 
