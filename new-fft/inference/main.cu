@@ -9,6 +9,29 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <fstream>
+
+void writeInferenceSummary(
+    const std::string& path,
+    int samples,
+    int correct,
+    double totalTimeMs
+)
+{
+    std::ofstream file(path);
+    if (!file)
+        throw std::runtime_error("Failed to open inference summary file");
+
+    double accuracy = 100.0 * correct / samples;
+    double avgTime = totalTimeMs / samples;
+
+    file << "STL10 CNN Inference Statistics (only CUDA FFT Conv)\n";
+    file << "-----------------------------\n";
+    file << "Samples           : " << samples << "\n";
+    file << "Accuracy (%)      : " << accuracy << "\n";
+    file << "Total Time (ms)   : " << totalTimeMs << "\n";
+    file << "Avg / Image (ms)  : " << avgTime << "\n";
+}
 
 int main()
 {
@@ -181,6 +204,14 @@ int main()
               << (totalTimeMs / totalImages) << " ms\n";
     std::cout << "CSV written to inference_stats.csv\n";
     std::cout << "==============================\n";
+
+    writeInferenceSummary(
+        "inference_summary.txt",
+        totalImages,
+        correct,
+        totalTimeMs
+    );
+
 
     return 0;
 }
