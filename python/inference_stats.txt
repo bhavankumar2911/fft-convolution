@@ -1,0 +1,6 @@
+STL10 CNN Inference Statistics
+-----------------------------
+Samples           : 100
+Accuracy (%)      : 61.00
+Total Time (ms)   : 237.145
+Avg / Image (ms)  : 2.371452
