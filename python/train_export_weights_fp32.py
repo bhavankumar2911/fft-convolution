@@ -69,7 +69,7 @@ def main():
     num_workers = 0
 
     csv_file = "training_stats.csv"
-    weights_bin_dir = "./weights_bin"
+    weights_bin_dir = "../inference-combined/trained_weights_fp32"
 
     # -----------------------------
     # Transforms (float32 ONLY)
