@@ -1,0 +1,14 @@
+clang++ -O3 -std=c++17 \             
+    full_cpu_inference.cpp \
+    cnpy/cnpy.cpp \
+    -I$LIBTORCH/include \
+    -I$LIBTORCH/include/torch/csrc/api/include \
+    -Icnpy \
+    -I/opt/homebrew/Cellar/libomp/21.1.8/include \
+    -L$LIBTORCH/lib \
+    -L/opt/homebrew/Cellar/libomp/21.1.8/lib \
+    -ltorch -ltorch_cpu -lc10 \
+    -lz \
+    -Wl,-rpath,$LIBTORCH/lib \
+    -Wl,-rpath,/opt/homebrew/Cellar/libomp/21.1.8/lib \
+    -o full_cpu_inference

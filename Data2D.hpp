@@ -1,5 +1,5 @@
-#ifndef DATA2D_H
-#define DATA2D_H
+#ifndef DATA2D_HPP
+#define DATA2D_HPP
 
 #include <vector>
 #include <random>
@@ -7,196 +7,161 @@
 #include <string>
 #include <stdexcept>
 #include <iostream>
+#include <iomanip>
+#include <type_traits>
+#include <cmath>
 
-using namespace std;
-
+template<typename T>
 class Data2D
 {
-private:
-    int matrixHeight;
-    int matrixWidth;
-    vector<vector<double>> matrix;
+    static_assert(std::is_floating_point<T>::value, "Data2D requires a floating point type");
 
-    string buildFilePath(const string& folder, int h, int w) const
+private:
+    int height_;
+    int width_;
+    std::vector<T> storage_; // row-major: index = y*width + x
+
+    static std::string buildFilePath(const std::string& folder, int h, int w)
     {
-        string path = folder;
+        std::string path = folder;
 #ifdef _WIN32
         if (!path.empty() && path.back() != '\\') path += '\\';
 #else
         if (!path.empty() && path.back() != '/') path += '/';
 #endif
-        path += to_string(h) + "x" + to_string(w) + ".bin";
+        path += std::to_string(h) + "x" + std::to_string(w) + ".bin";
         return path;
     }
 
 public:
-    static double sumAbsoluteDifference(
-            const vector<vector<double>>& firstMatrix,
-            const vector<vector<double>>& secondMatrix)
+    Data2D(int h = 0, int w = 0)
+        : height_(h), width_(w), storage_()
     {
-        const int heightA = firstMatrix.size();
-        const int heightB = secondMatrix.size();
+        if (h < 0 || w < 0) throw std::invalid_argument("Dimensions must be non-negative");
+        if (h > 0 && w > 0) storage_.assign(static_cast<size_t>(h) * w, static_cast<T>(0));
+    }
 
-        if (heightA == 0 || heightB == 0)
-            throw runtime_error("Matrices must not be empty");
+    void resize(int h, int w)
+    {
+        if (h <= 0 || w <= 0) throw std::invalid_argument("Dimensions must be positive");
+        height_ = h; width_ = w;
+        storage_.assign(static_cast<size_t>(h) * w, static_cast<T>(0));
+    }
 
-        const int widthA = firstMatrix[0].size();
-        const int widthB = secondMatrix[0].size();
+    int getHeight() const { return height_; }
+    int getWidth()  const { return width_;  }
+    const std::vector<T>& data() const { return storage_; }
+    std::vector<T>& data() { return storage_; }
 
-        if (heightA != heightB || widthA != widthB)
-            throw runtime_error("Matrix dimensions do not match for sumAbsoluteDifference");
+    inline T operator()(int y, int x) const { return storage_[static_cast<size_t>(y) * width_ + x]; }
+    inline T& operator()(int y, int x) { return storage_[static_cast<size_t>(y) * width_ + x]; }
 
-        double sum = 0.0;
+    T at(int y, int x) const
+    {
+        if (y < 0 || x < 0 || y >= height_ || x >= width_) throw std::out_of_range("Data2D::at out of range");
+        return storage_[static_cast<size_t>(y) * width_ + x];
+    }
 
-        for (int y = 0; y < heightA; ++y)
-            for (int x = 0; x < widthA; ++x)
-                sum += std::abs(firstMatrix[y][x] - secondMatrix[y][x]);
+    T& atRef(int y, int x)
+    {
+        if (y < 0 || x < 0 || y >= height_ || x >= width_) throw std::out_of_range("Data2D::atRef out of range");
+        return storage_[static_cast<size_t>(y) * width_ + x];
+    }
 
+    void fillRandom(T minVal = static_cast<T>(0), T maxVal = static_cast<T>(1))
+    {
+        if (height_ <= 0 || width_ <= 0) throw std::runtime_error("Matrix not initialized");
+        std::mt19937 gen(std::random_device{}());
+        std::uniform_real_distribution<T> d(minVal, maxVal);
+        for (T &v : storage_) v = d(gen);
+    }
+
+    void saveToBinary(const std::string& folderPath) const
+    {
+        if (height_ <= 0 || width_ <= 0) throw std::runtime_error("saveToBinary: invalid dims");
+        std::string file = buildFilePath(folderPath, height_, width_);
+        std::cout << "Saving matrix to: " << file << '\n';
+        std::ofstream out(file, std::ios::binary);
+        if (!out) throw std::runtime_error("Failed to open output file: " + file);
+        out.write(reinterpret_cast<const char*>(&height_), sizeof(int));
+        out.write(reinterpret_cast<const char*>(&width_), sizeof(int));
+        out.write(reinterpret_cast<const char*>(storage_.data()), static_cast<std::streamsize>(storage_.size() * sizeof(T)));
+    }
+
+    void loadFromBinary(const std::string& folderPath, int h, int w)
+    {
+        if (h <= 0 || w <= 0) throw std::invalid_argument("loadFromBinary: dimensions must be positive");
+        std::string file = buildFilePath(folderPath, h, w);
+        std::ifstream in(file, std::ios::binary);
+        if (!in) throw std::runtime_error("Failed to open input file: " + file);
+        int fh = 0, fw = 0;
+        in.read(reinterpret_cast<char*>(&fh), sizeof(int));
+        in.read(reinterpret_cast<char*>(&fw), sizeof(int));
+        if (fh != h || fw != w) throw std::runtime_error("loadFromBinary: file header dims do not match provided dims");
+        height_ = h; width_ = w;
+        storage_.assign(static_cast<size_t>(height_) * width_, static_cast<T>(0));
+        in.read(reinterpret_cast<char*>(storage_.data()), static_cast<std::streamsize>(storage_.size() * sizeof(T)));
+    }
+
+    static T sumAbsoluteDifference(const Data2D& A, const Data2D& B)
+    {
+        if (A.getHeight() != B.getHeight() || A.getWidth() != B.getWidth())
+            throw std::runtime_error("sumAbsoluteDifference: dimensions do not match");
+        T sum = static_cast<T>(0);
+        const size_t n = A.data().size();
+        const T* aPtr = A.data().data();
+        const T* bPtr = B.data().data();
+        for (size_t i = 0; i < n; ++i) sum += std::abs(aPtr[i] - bPtr[i]);
         return sum;
     }
 
-    static void printAbsoluteDifference(
-            const vector<vector<double>>& firstMatrix,
-            const vector<vector<double>>& secondMatrix)
+    // Print absolute difference between two matrices (must be same dimensions)
+    static void printAbsoluteDifferenceMatrix(const Data2D& A, const Data2D& B, int maxRows = -1, int maxCols = -1)
     {
-        const int heightA = firstMatrix.size();
-        const int heightB = secondMatrix.size();
-
-        if (heightA == 0 || heightB == 0)
-            throw runtime_error("Matrices must not be empty");
-
-        const int widthA = firstMatrix[0].size();
-        const int widthB = secondMatrix[0].size();
-
-        if (heightA != heightB || widthA != widthB)
-            throw runtime_error("Matrix dimensions do not match for absolute difference");
-
-        cout.setf(std::ios::fixed);
-        cout << std::setprecision(6);
-
-        for (int y = 0; y < heightA; ++y)
-        {
-            for (int x = 0; x < widthA; ++x)
-            {
-                double elementDifference = std::abs(firstMatrix[y][x] - secondMatrix[y][x]);
-                cout << elementDifference << " ";
-            }
-            cout << '\n';
-        }
-    }
-
-    static void printMatrix(const vector<vector<double>>& matrix2d)
-    {
-        const int height = matrix2d.size();
-        if (height == 0)
-        {
-            cout << "Matrix is empty\n";
+        if (A.getHeight() == 0 || B.getHeight() == 0) {
+            std::cout << "Matrix is empty\n";
             return;
         }
 
-        const int width = matrix2d[0].size();
+        if (A.getHeight() != B.getHeight() || A.getWidth() != B.getWidth()) {
+            std::cout << "Dimension mismatch\n";
+            return;
+        }
 
-        cout.setf(std::ios::fixed);
-        cout << std::setprecision(6);
+        int H = A.getHeight();
+        int W = A.getWidth();
 
-        for (int y = 0; y < height; ++y)
+        if (maxRows < 0 || maxRows > H) maxRows = H;
+        if (maxCols < 0 || maxCols > W) maxCols = W;
+
+        std::cout.setf(std::ios::fixed);
+        std::cout << std::setprecision(6);
+
+        for (int y = 0; y < maxRows; ++y)
         {
-            for (int x = 0; x < width; ++x)
-                cout << matrix2d[y][x] << " ";
-            cout << '\n';
+            for (int x = 0; x < maxCols; ++x)
+            {
+                T diff = static_cast<T>(std::abs(A(y, x) - B(y, x)));
+                std::cout << diff << " ";
+            }
+            std::cout << "\n";
         }
     }
 
-    // Construct optionally empty matrix with given dims
-    Data2D(int height = 0, int width = 0)
-        : matrixHeight(height), matrixWidth(width), matrix()
+    static void printMatrixSample(const Data2D& M, int maxRows = -1, int maxCols = -1)
     {
-        if (height < 0 || width < 0)
-            throw invalid_argument("Dimensions must be non-negative");
-        if (height > 0 && width > 0)
-            matrix.assign(height, vector<double>(width));
+        if (M.getHeight() == 0 || M.getWidth() == 0) { std::cout << "Matrix is empty\n"; return; }
+        if (maxRows < 0 || maxRows > M.getHeight()) maxRows = M.getHeight();
+        if (maxCols < 0 || maxCols > M.getWidth())  maxCols = M.getWidth();
+        std::cout.setf(std::ios::fixed);
+        std::cout << std::setprecision(6);
+        for (int y = 0; y < maxRows; ++y)
+        {
+            for (int x = 0; x < maxCols; ++x)
+                std::cout << M(y, x) << " ";
+            std::cout << "\n";
+        }
     }
-
-    // Resize internal storage to height x width (keeps contents undefined)
-    void resize(int height, int width)
-    {
-        if (height <= 0 || width <= 0)
-            throw invalid_argument("Dimensions must be positive");
-        matrixHeight = height;
-        matrixWidth = width;
-        matrix.assign(height, vector<double>(width));
-    }
-
-    // Fill current matrix with random values
-    void fillRandom(double minVal = 0.0, double maxVal = 1.0)
-    {
-        if (matrixHeight <= 0 || matrixWidth <= 0)
-            throw runtime_error("Matrix not initialized (height/width == 0)");
-        mt19937 generator(random_device{}());
-        uniform_real_distribution<double> distribution(minVal, maxVal);
-        for (int y = 0; y < matrixHeight; ++y)
-            for (int x = 0; x < matrixWidth; ++x)
-                matrix[y][x] = distribution(generator);
-    }
-
-    // Save to folder using provided height/width (caller supplies dims)
-    // Caller must provide the same dims as the in-memory matrix.
-    void saveToBinary(const string& folderPath, int height, int width) const
-    {
-        if (height != matrixHeight || width != matrixWidth)
-            throw runtime_error("saveToBinary: provided dimensions do not match in-memory matrix");
-
-        string file = buildFilePath(folderPath, height, width);
-        cout << "Saving matrix to: " << file << '\n';
-
-        ofstream out(file, ios::binary);
-        if (!out) throw runtime_error("Failed to open output file: " + file);
-
-        out.write(reinterpret_cast<const char*>(&height), sizeof(int));
-        out.write(reinterpret_cast<const char*>(&width), sizeof(int));
-
-        for (int y = 0; y < height; ++y)
-            out.write(reinterpret_cast<const char*>(matrix[y].data()),
-                      static_cast<std::streamsize>(width * sizeof(double)));
-    }
-
-    // Load from folder using provided height/width.
-    // This resizes the internal matrix to the provided dims and fills it with data from file.
-    void loadFromBinary(const string& folderPath, int height, int width)
-    {
-        if (height <= 0 || width <= 0)
-            throw invalid_argument("loadFromBinary: dimensions must be positive");
-
-        string file = buildFilePath(folderPath, height, width);
-
-        ifstream in(file, ios::binary);
-        if (!in) throw runtime_error("Failed to open input file: " + file);
-
-        int h = 0, w = 0;
-        in.read(reinterpret_cast<char*>(&h), sizeof(int));
-        in.read(reinterpret_cast<char*>(&w), sizeof(int));
-
-        if (h != height || w != width)
-            throw runtime_error("loadFromBinary: file header dims do not match provided dims");
-
-        // resize storage and read
-        matrixHeight = height;
-        matrixWidth = width;
-        matrix.assign(matrixHeight, vector<double>(matrixWidth));
-
-        for (int y = 0; y < matrixHeight; ++y)
-            in.read(reinterpret_cast<char*>(matrix[y].data()),
-                    static_cast<std::streamsize>(matrixWidth * sizeof(double)));
-
-        // cout << "Loaded matrix dims: " << matrix.size() << " x "
-        //      << (matrix.empty() ? 0 : matrix[0].size()) << '\n';
-    }
-
-    // Accessors
-    const vector<vector<double>>& getMatrix() const { return matrix; }
-    std::vector<std::vector<double>>& getMatrix() { return matrix; }
-    int getHeight() const { return matrixHeight; }
-    int getWidth() const { return matrixWidth; }
 };
 
-#endif // DATA2D_H
+#endif // DATA2D_HPP

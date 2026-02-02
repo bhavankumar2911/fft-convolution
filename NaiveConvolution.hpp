@@ -1,147 +1,144 @@
 #ifndef NAIVE_CONVOLUTION_HPP
 #define NAIVE_CONVOLUTION_HPP
 
-#include <vector>
+#include "Data2D.hpp"
 #include <chrono>
-#include <string>
 #include <stdexcept>
-#include <cmath>
+#include <string>
+#include <type_traits>
 
-using namespace std;
-
+template<typename T>
 class NaiveConvolution2D
 {
+    static_assert(std::is_floating_point<T>::value, "NaiveConvolution2D requires floating point type");
+
 public:
     struct ConvolutionResult
     {
-        vector<vector<double>> resultMatrix;
+        Data2D<T> result;
         double elapsedMilliseconds;
     };
 
 private:
-    const vector<vector<double>>& imageMatrix;
-    const vector<vector<double>>& kernelMatrix;
+    const Data2D<T> &image_;
+    const Data2D<T> &kernel_;
+    int imageH_, imageW_, kernelH_, kernelW_;
 
-    int imageHeight;
-    int imageWidth;
-    int kernelHeight;
-    int kernelWidth;
-
-    inline double getImageValueOrZero(int y, int x) const
+    inline T getImageValueOrZero(int y, int x) const
     {
-        if (y < 0 || x < 0 || y >= imageHeight || x >= imageWidth) return 0.0;
-        return imageMatrix[y][x];
+        if (y < 0 || x < 0 || y >= imageH_ || x >= imageW_) return static_cast<T>(0);
+        return image_(y, x);
     }
 
 public:
-    NaiveConvolution2D(const vector<vector<double>>& image,
-                       const vector<vector<double>>& kernel)
-        : imageMatrix(image),
-          kernelMatrix(kernel)
+    NaiveConvolution2D(const Data2D<T>& img, const Data2D<T>& ker)
+        : image_(img), kernel_(ker)
     {
-        imageHeight  = static_cast<int>(imageMatrix.size());
-        imageWidth   = imageHeight ? static_cast<int>(imageMatrix[0].size()) : 0;
-        kernelHeight = static_cast<int>(kernelMatrix.size());
-        kernelWidth  = kernelHeight ? static_cast<int>(kernelMatrix[0].size()) : 0;
-        if (imageHeight < 0 || imageWidth < 0 || kernelHeight < 0 || kernelWidth < 0)
-            throw invalid_argument("Negative dimensions are not allowed");
+        imageH_ = image_.getHeight(); imageW_ = image_.getWidth();
+        kernelH_ = kernel_.getHeight(); kernelW_ = kernel_.getWidth();
+        if (imageH_ < 0 || imageW_ < 0 || kernelH_ < 0 || kernelW_ < 0)
+            throw std::invalid_argument("Negative dimensions are not allowed");
     }
 
-    // outputMode: "valid" | "same" | "full"
-    ConvolutionResult computeConvolution(const string &outputMode = "valid")
+    ConvolutionResult computeConvolution(const std::string &outputMode = "valid")
     {
-        auto tStart = chrono::high_resolution_clock::now();
+        auto tStart = std::chrono::high_resolution_clock::now();
 
-        if (kernelHeight <= 0 || kernelWidth <= 0 || imageHeight <= 0 || imageWidth <= 0)
-            return ConvolutionResult{ {}, 0.0 };
+        if (kernelH_ <= 0 || kernelW_ <= 0 || imageH_ <= 0 || imageW_ <= 0)
+            return ConvolutionResult{ Data2D<T>(), 0.0 };
 
         if (outputMode != "valid" && outputMode != "same" && outputMode != "full")
-            throw invalid_argument("outputMode must be 'valid', 'same' or 'full'");
+            throw std::invalid_argument("outputMode must be 'valid', 'same' or 'full'");
 
         if (outputMode == "valid")
         {
-            int outputHeight = imageHeight - kernelHeight + 1;
-            int outputWidth  = imageWidth  - kernelWidth  + 1;
+            int outH = imageH_ - kernelH_ + 1;
+            int outW = imageW_ - kernelW_ + 1;
+            if (outH <= 0 || outW <= 0) return ConvolutionResult{ Data2D<T>(), 0.0 };
+            Data2D<T> res(outH, outW);
 
-            if (outputHeight <= 0 || outputWidth <= 0)
-                return ConvolutionResult{ {}, 0.0 };
-
-            vector<vector<double>> result(outputHeight, vector<double>(outputWidth, 0.0));
-
-            for (int row = 0; row < outputHeight; ++row)
-                for (int col = 0; col < outputWidth; ++col)
+            for (int y = 0; y < outH; ++y)
+            {
+                for (int x = 0; x < outW; ++x)
                 {
-                    double sum = 0.0;
-                    for (int kr = 0; kr < kernelHeight; ++kr)
-                        for (int kc = 0; kc < kernelWidth; ++kc)
-                            sum += imageMatrix[row + kr][col + kc] * kernelMatrix[kr][kc];
-                    result[row][col] = sum;
+                    T s = static_cast<T>(0);
+                    const int baseY = y;
+                    const int baseX = x;
+                    const std::vector<T>& imgData = image_.data();
+                    const std::vector<T>& kerData = kernel_.data();
+                    for (int ky = 0; ky < kernelH_; ++ky)
+                    {
+                        size_t rowOffset = static_cast<size_t>(baseY + ky) * imageW_;
+                        size_t kOffset   = static_cast<size_t>(ky) * kernelW_;
+                        for (int kx = 0; kx < kernelW_; ++kx)
+                        {
+                            s += imgData[rowOffset + (baseX + kx)] * kerData[kOffset + kx];
+                        }
+                    }
+                    res(y, x) = s;
                 }
+            }
 
-            auto tEnd = chrono::high_resolution_clock::now();
-            double elapsedMs = chrono::duration<double, milli>(tEnd - tStart).count();
-            return ConvolutionResult{ result, elapsedMs };
+            auto tEnd = std::chrono::high_resolution_clock::now();
+            double elapsed = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+            return ConvolutionResult{ res, elapsed };
         }
         else if (outputMode == "full")
         {
-            int outH = imageHeight + kernelHeight - 1;
-            int outW = imageWidth  + kernelWidth  - 1;
-
-            vector<vector<double>> result(outH, vector<double>(outW, 0.0));
+            int outH = imageH_ + kernelH_ - 1;
+            int outW = imageW_ + kernelW_ - 1;
+            Data2D<T> res(outH, outW);
 
             for (int y = 0; y < outH; ++y)
             {
                 for (int x = 0; x < outW; ++x)
                 {
-                    double s = 0.0;
-                    // top-left anchor: kernel (0,0) aligns with image coordinate (y,x)
-                    for (int kr = 0; kr < kernelHeight; ++kr)
+                    T s = static_cast<T>(0);
+                    for (int ky = 0; ky < kernelH_; ++ky)
                     {
-                        for (int kc = 0; kc < kernelWidth; ++kc)
+                        for (int kx = 0; kx < kernelW_; ++kx)
                         {
-                            int iy = y + kr;
-                            int ix = x + kc;
-                            if (iy < 0 || ix < 0 || iy >= imageHeight || ix >= imageWidth) continue;
-                            s += imageMatrix[iy][ix] * kernelMatrix[kr][kc];
+                            int iy = y - ky;
+                            int ix = x - kx;
+                            if (iy < 0 || ix < 0 || iy >= imageH_ || ix >= imageW_) continue;
+                            s += image_(iy, ix) * kernel_(ky, kx);
                         }
                     }
-                    result[y][x] = s;
+                    res(y, x) = s;
                 }
             }
 
-            auto tEnd = chrono::high_resolution_clock::now();
-            double elapsedMs = chrono::duration<double, milli>(tEnd - tStart).count();
-            return ConvolutionResult{ result, elapsedMs };
+            auto tEnd = std::chrono::high_resolution_clock::now();
+            double elapsed = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+            return ConvolutionResult{ res, elapsed };
         }
         else // "same"
         {
-            int outH = imageHeight;
-            int outW = imageWidth;
-            vector<vector<double>> result(outH, vector<double>(outW, 0.0));
+            int outH = imageH_, outW = imageW_;
+            Data2D<T> res(outH, outW);
 
             for (int y = 0; y < outH; ++y)
             {
                 for (int x = 0; x < outW; ++x)
                 {
-                    double s = 0.0;
-                    // top-left anchor: kernel (0,0) aligns with image coordinate (y,x)
-                    for (int kr = 0; kr < kernelHeight; ++kr)
+                    T s = static_cast<T>(0);
+                    for (int ky = 0; ky < kernelH_; ++ky)
                     {
-                        for (int kc = 0; kc < kernelWidth; ++kc)
+                        for (int kx = 0; kx < kernelW_; ++kx)
                         {
-                            int iy = y + kr;
-                            int ix = x + kc;
-                            double iv = getImageValueOrZero(iy, ix); // zero-pad out-of-bounds
-                            s += iv * kernelMatrix[kr][kc];
+                            int iy = y + ky - (kernelH_/2);
+                            int ix = x + kx - (kernelW_/2);
+                            T iv = getImageValueOrZero(iy, ix);
+                            s += iv * kernel_(ky, kx);
                         }
                     }
-                    result[y][x] = s;
+                    res(y, x) = s;
                 }
             }
 
-            auto tEnd = chrono::high_resolution_clock::now();
-            double elapsedMs = chrono::duration<double, milli>(tEnd - tStart).count();
-            return ConvolutionResult{ result, elapsedMs };
+            auto tEnd = std::chrono::high_resolution_clock::now();
+            double elapsed = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+            return ConvolutionResult{ res, elapsed };
         }
     }
 };

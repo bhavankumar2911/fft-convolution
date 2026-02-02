@@ -1,0 +1,6 @@
+STL10 CNN Inference Statistics (only CUDA FFT Conv)
+-----------------------------
+Samples           : 100
+Accuracy (%)      : 61
+Total Time (ms)   : 240964
+Avg / Image (ms)  : 2409.64

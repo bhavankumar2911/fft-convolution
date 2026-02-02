@@ -1,0 +1,6 @@
+nvcc -O3 --use_fast_math -std=c++17 \
+    inference/main.cu \
+    cnpy/cnpy.cpp \
+    -Iinclude -Icnpy \
+    -lcufft -lcudart -lz \
+    -o inference/main
