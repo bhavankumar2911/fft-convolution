@@ -1,0 +1,12 @@
+features_0_weight.bin shape=(32, 3, 5, 5) dtype=float64
+features_0_bias.bin shape=(32,) dtype=float64
+features_3_weight.bin shape=(64, 32, 5, 5) dtype=float64
+features_3_bias.bin shape=(64,) dtype=float64
+features_6_weight.bin shape=(128, 64, 3, 3) dtype=float64
+features_6_bias.bin shape=(128,) dtype=float64
+features_9_weight.bin shape=(256, 128, 3, 3) dtype=float64
+features_9_bias.bin shape=(256,) dtype=float64
+classifier_0_weight.bin shape=(512, 9216) dtype=float64
+classifier_0_bias.bin shape=(512,) dtype=float64
+classifier_2_weight.bin shape=(10, 512) dtype=float64
+classifier_2_bias.bin shape=(10,) dtype=float64
