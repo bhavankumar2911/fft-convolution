@@ -221,3 +221,6 @@ python/data64/
 new-fft/fft_cuda_outputs/
 new-fft/fft_outputs/
 new-fft/fft_outputs64/
+
+test/images/
+test/kernels/
