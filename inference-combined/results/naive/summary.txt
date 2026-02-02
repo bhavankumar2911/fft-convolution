@@ -1,10 +1,10 @@
 STL10 Inference Summary
 ----------------------
 Samples                     : 100
-Accuracy (%)                : 8
+Accuracy (%)                : 58
 
-Total inference time (ms)   : 44826.4
-Avg inference / image (ms)  : 448.264
+Total inference time (ms)   : 44751.9
+Avg inference / image (ms)  : 447.519
 
-Total convolution time (ms) : 44352.7
-Avg convolution / image(ms): 443.527
+Total convolution time (ms) : 44279.2
+Avg convolution / image(ms): 442.792
