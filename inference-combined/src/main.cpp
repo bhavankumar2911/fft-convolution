@@ -25,23 +25,23 @@ int main() {
 
     convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
         3, 32, 5, 2,
-        "../trained_weights/features_0_weight.bin",
-        "../trained_weights/features_0_bias.bin"
+        "../trained_weights_fp32/features_0_weight.bin",
+        "../trained_weights_fp32/features_0_bias.bin"
     ));
     convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
         32, 64, 5, 2,
-        "../trained_weights/features_3_weight.bin",
-        "../trained_weights/features_3_bias.bin"
+        "../trained_weights_fp32/features_3_weight.bin",
+        "../trained_weights_fp32/features_3_bias.bin"
     ));
     convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
         64, 128, 3, 1,
-        "../trained_weights/features_6_weight.bin",
-        "../trained_weights/features_6_bias.bin"
+        "../trained_weights_fp32/features_6_weight.bin",
+        "../trained_weights_fp32/features_6_bias.bin"
     ));
     convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
         128, 256, 3, 1,
-        "../trained_weights/features_9_weight.bin",
-        "../trained_weights/features_9_bias.bin"
+        "../trained_weights_fp32/features_9_weight.bin",
+        "../trained_weights_fp32/features_9_bias.bin"
     ));
 
     FeatureExtractor<Real> extractor(std::move(convLayers));
@@ -50,13 +50,13 @@ int main() {
         std::move(extractor),
         Linear<Real>(
             256 * 6 * 6, 512,
-            "../trained_weights/classifier_0_weight.bin",
-            "../trained_weights/classifier_0_bias.bin"
+            "../trained_weights_fp32/classifier_0_weight.bin",
+            "../trained_weights_fp32/classifier_0_bias.bin"
         ),
         Linear<Real>(
             512, 10,
-            "../trained_weights/classifier_2_weight.bin",
-            "../trained_weights/classifier_2_bias.bin"
+            "../trained_weights_fp32/classifier_2_weight.bin",
+            "../trained_weights_fp32/classifier_2_bias.bin"
         )
     );
 
