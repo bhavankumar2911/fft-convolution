@@ -7,38 +7,64 @@
 #include <string>
 
 #include "data/BinaryTensorLoader.hpp"
-#include "cpu/NaiveCPUConvolution2D.hpp"
 #include "model/STL10CNNModel.hpp"
 
-int main() {
-    using Real = float;   // FP32 default (matches PyTorch)
+// -------------------------------------------------
+// Compile-time datatype selection
+// -------------------------------------------------
+#ifdef USE_FP64
+    using Real = double;
+    constexpr const char* DTYPE_NAME = "fp64";
+#else
+    using Real = float;
+    constexpr const char* DTYPE_NAME = "fp32";
+#endif
 
+// -------------------------------------------------
+// Compile-time backend selection
+// -------------------------------------------------
+#ifdef USE_FFT
+    #include "cuda/FFTConvolution2D_CUDA.hpp"
+    template<typename T>
+    using Conv2D = FFTConvolution2D_CUDA<T>;
+    constexpr const char* BACKEND_NAME = "fft_cuda";
+#else
+    #include "cpu/NaiveCPUConvolution2D.hpp"
+    template<typename T>
+    using Conv2D = NaiveCPUConvolution2D<T>;
+    constexpr const char* BACKEND_NAME = "naive";
+#endif
+
+int main() {
     // -------------------------------------------------
-    // Ensure output directories exist
+    // Output directories
     // -------------------------------------------------
-    std::filesystem::create_directories("../results/naive");
+    std::string resultDir =
+        std::string("../results/") + BACKEND_NAME + "_" + DTYPE_NAME;
+
+    std::filesystem::create_directories(resultDir);
 
     // -------------------------------------------------
     // Build convolution layers
     // -------------------------------------------------
     std::vector<std::unique_ptr<IConvolution2D<Real>>> convLayers;
 
-    convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
+    convLayers.push_back(std::make_unique<Conv2D<Real>>(
         3, 32, 5, 2,
         "../trained_weights_fp32/features_0_weight.bin",
         "../trained_weights_fp32/features_0_bias.bin"
     ));
-    convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
+    convLayers.push_back(std::make_unique<Conv2D<Real>>(
         32, 64, 5, 2,
         "../trained_weights_fp32/features_3_weight.bin",
         "../trained_weights_fp32/features_3_bias.bin"
     ));
-    convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
+    convLayers.push_back(std::make_unique<Conv2D<Real>>(
         64, 128, 3, 1,
         "../trained_weights_fp32/features_6_weight.bin",
         "../trained_weights_fp32/features_6_bias.bin"
     ));
-    convLayers.push_back(std::make_unique<NaiveCPUConvolution2D<Real>>(
+    convLayers.push_back(std::make_unique<Conv2D<Real>>(
         128, 256, 3, 1,
         "../trained_weights_fp32/features_9_weight.bin",
         "../trained_weights_fp32/features_9_bias.bin"
@@ -63,8 +89,8 @@ int main() {
     // -------------------------------------------------
     // Output files
     // -------------------------------------------------
-    std::ofstream csv("../results/naive/layerwise_timing.csv");
-    std::ofstream summary("../results/naive/summary.txt");
+    std::ofstream csv(resultDir + "/layerwise_timing.csv");
+    std::ofstream summary(resultDir + "/summary.txt");
 
     if (!csv || !summary) {
         std::cerr << "ERROR: Failed to open output files\n";
@@ -81,11 +107,9 @@ int main() {
     // -------------------------------------------------
     int totalSamples = 0;
     int correct = 0;
-
     double totalInferenceMs = 0.0;
     double totalConvMs = 0.0;
 
-    // Count total images (for progress)
     int totalImages = 0;
     for (const auto& e : std::filesystem::directory_iterator("../test_images_bin"))
         if (e.path().extension() == ".bin")
@@ -107,7 +131,6 @@ int main() {
         const std::string imagePath = entry.path().string();
         const std::string imageName = entry.path().filename().string();
 
-        // Load + normalize (matches PyTorch exactly)
         Tensor<Real> input =
             BinaryTensorLoader::loadImageCHW<Real>(
                 imagePath, 3, 96, 96
@@ -141,19 +164,15 @@ int main() {
         // -----------------------------
         // Other layers timing
         // -----------------------------
-        double reluMs = model.featureExtractor().reluTimeMs();
-        double poolMs = model.featureExtractor().poolTimeMs();
-        double fcMs   = model.fcTimeMs();
-
-        csv << "," << reluMs
-            << "," << poolMs
-            << "," << fcMs
+        csv << "," << model.featureExtractor().reluTimeMs()
+            << "," << model.featureExtractor().poolTimeMs()
+            << "," << model.fcTimeMs()
             << "," << imageConvMs
             << "," << inferMs
             << "\n";
 
         // -----------------------------
-        // Prediction / accuracy
+        // Accuracy
         // -----------------------------
         int predicted = 0;
         Real maxVal = logits[0];
@@ -164,7 +183,6 @@ int main() {
             }
         }
 
-        // filename format: image_XXX_label_Y.bin
         std::size_t pos = imageName.find("_label_");
         int trueLabel = std::stoi(
             imageName.substr(
@@ -175,11 +193,10 @@ int main() {
 
         bool ok = (predicted == trueLabel);
         if (ok) correct++;
-
         totalSamples++;
 
         // -----------------------------
-        // Progress print
+        // Progress
         // -----------------------------
         std::cout << "[" << imageIndex << "/" << totalImages << "] "
                   << imageName
@@ -192,28 +209,29 @@ int main() {
     // -------------------------------------------------
     // Summary
     // -------------------------------------------------
-    double avgInferMs = totalInferenceMs / totalSamples;
-    double avgConvMs  = totalConvMs / totalSamples;
-    double accuracy   = 100.0 * correct / totalSamples;
-
     summary << "STL10 Inference Summary\n";
     summary << "----------------------\n";
+    summary << "Backend                     : " << BACKEND_NAME << "\n";
+    summary << "Datatype                    : " << DTYPE_NAME << "\n";
     summary << "Samples                     : " << totalSamples << "\n";
-    summary << "Accuracy (%)                : " << accuracy << "\n\n";
+    summary << "Accuracy (%)                : "
+            << (100.0 * correct / totalSamples) << "\n\n";
 
     summary << "Total inference time (ms)   : " << totalInferenceMs << "\n";
-    summary << "Avg inference / image (ms)  : " << avgInferMs << "\n\n";
+    summary << "Avg inference / image (ms)  : "
+            << (totalInferenceMs / totalSamples) << "\n\n";
 
     summary << "Total convolution time (ms) : " << totalConvMs << "\n";
-    summary << "Avg convolution / image(ms): " << avgConvMs << "\n";
+    summary << "Avg convolution / image(ms): "
+            << (totalConvMs / totalSamples) << "\n";
 
     csv.close();
     summary.close();
 
     std::cout << "\nInference complete.\n";
-    std::cout << "Results written to:\n";
-    std::cout << "  ../results/naive/layerwise_timing.csv\n";
-    std::cout << "  ../results/naive/summary.txt\n";
+    std::cout << "Backend : " << BACKEND_NAME << "\n";
+    std::cout << "Datatype: " << DTYPE_NAME << "\n";
+    std::cout << "Results : " << resultDir << "\n";
 
     return 0;
 }

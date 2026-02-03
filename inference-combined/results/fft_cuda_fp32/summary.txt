@@ -1,0 +1,12 @@
+STL10 Inference Summary
+----------------------
+Backend                     : fft_cuda
+Datatype                    : fp32
+Samples                     : 100
+Accuracy (%)                : 58
+
+Total inference time (ms)   : 146248
+Avg inference / image (ms)  : 1462.48
+
+Total convolution time (ms) : 145776
+Avg convolution / image(ms): 1457.76
