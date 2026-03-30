@@ -5,6 +5,7 @@
 #include <memory>
 #include <chrono>
 #include <string>
+#include <ctime>
 
 #include "data/BinaryTensorLoader.hpp"
 #include "model/STL10CNNModel.hpp"
@@ -54,10 +55,15 @@
 
 int main() {
     // -------------------------------------------------
-    // Output directory
+    // Output directory: results/<timestamp>/<backend>_<dtype>
+    // Timestamp format: YYYYMMDD_HHMMSS
     // -------------------------------------------------
+    std::time_t now = std::time(nullptr);
+    char tsBuf[32];
+    std::strftime(tsBuf, sizeof(tsBuf), "%Y-%m-%d-%H-%M", std::localtime(&now));
+
     std::string resultDir =
-        std::string("../results/") + BACKEND_NAME + "_" + DTYPE_NAME;
+        std::string("../results/") + BACKEND_NAME + "_" + DTYPE_NAME + "/" + tsBuf;
     std::filesystem::create_directories(resultDir);
 
     // -------------------------------------------------
