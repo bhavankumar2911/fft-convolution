@@ -107,8 +107,11 @@ int main() {
     // -------------------------------------------------
     int totalSamples = 0;
     int correct = 0;
-    double totalInferenceMs = 0.0;
-    double totalConvMs = 0.0;
+
+    int timedSamples = 0;   // excludes warm-up image
+
+    double totalInferenceMsTimed = 0.0;
+    double totalConvMsTimed = 0.0;
 
     int totalImages = 0;
     for (const auto& e : std::filesystem::directory_iterator("../test_images_bin"))
@@ -119,6 +122,7 @@ int main() {
     // Inference loop
     // -------------------------------------------------
     int imageIndex = 0;
+    bool warmupSkipped = false;
 
     for (const auto& entry :
          std::filesystem::directory_iterator("../test_images_bin")) {
@@ -145,8 +149,6 @@ int main() {
                 inferEnd - inferStart
             ).count();
 
-        totalInferenceMs += inferMs;
-
         // -----------------------------
         // Convolution timing
         // -----------------------------
@@ -159,17 +161,24 @@ int main() {
             imageConvMs += t;
         }
 
-        totalConvMs += imageConvMs;
-
-        // -----------------------------
-        // Other layers timing
-        // -----------------------------
         csv << "," << model.featureExtractor().reluTimeMs()
             << "," << model.featureExtractor().poolTimeMs()
             << "," << model.fcTimeMs()
             << "," << imageConvMs
             << "," << inferMs
             << "\n";
+
+        // -----------------------------
+        // Warm-up handling
+        // -----------------------------
+        if (!warmupSkipped) {
+            warmupSkipped = true;
+            std::cout << "[Warm-up image ignored for timing]\n";
+        } else {
+            totalInferenceMsTimed += inferMs;
+            totalConvMsTimed += imageConvMs;
+            timedSamples++;
+        }
 
         // -----------------------------
         // Accuracy
@@ -191,8 +200,9 @@ int main() {
             )
         );
 
-        bool ok = (predicted == trueLabel);
-        if (ok) correct++;
+        if (predicted == trueLabel)
+            correct++;
+
         totalSamples++;
 
         // -----------------------------
@@ -202,28 +212,31 @@ int main() {
                   << imageName
                   << " | pred=" << predicted
                   << " | true=" << trueLabel
-                  << " | " << (ok ? "OK" : "WRONG")
+                  << " | " << (predicted == trueLabel ? "OK" : "WRONG")
                   << std::endl;
     }
 
     // -------------------------------------------------
-    // Summary
+    // Summary (warm-up excluded)
     // -------------------------------------------------
-    summary << "STL10 Inference Summary\n";
-    summary << "----------------------\n";
+    summary << "STL10 Inference Summary (Warm-up excluded)\n";
+    summary << "-----------------------------------------\n";
     summary << "Backend                     : " << BACKEND_NAME << "\n";
     summary << "Datatype                    : " << DTYPE_NAME << "\n";
-    summary << "Samples                     : " << totalSamples << "\n";
+    summary << "Total images                : " << totalSamples << "\n";
+    summary << "Timed images                : " << timedSamples << "\n";
     summary << "Accuracy (%)                : "
             << (100.0 * correct / totalSamples) << "\n\n";
 
-    summary << "Total inference time (ms)   : " << totalInferenceMs << "\n";
+    summary << "=== End-to-End Inference ===\n";
+    summary << "Total inference time (ms)   : " << totalInferenceMsTimed << "\n";
     summary << "Avg inference / image (ms)  : "
-            << (totalInferenceMs / totalSamples) << "\n\n";
+            << (totalInferenceMsTimed / timedSamples) << "\n\n";
 
-    summary << "Total convolution time (ms) : " << totalConvMs << "\n";
+    summary << "=== Convolution ONLY ===\n";
+    summary << "Total convolution time (ms) : " << totalConvMsTimed << "\n";
     summary << "Avg convolution / image(ms): "
-            << (totalConvMs / totalSamples) << "\n";
+            << (totalConvMsTimed / timedSamples) << "\n";
 
     csv.close();
     summary.close();

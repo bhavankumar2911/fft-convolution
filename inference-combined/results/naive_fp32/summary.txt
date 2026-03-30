@@ -1,12 +1,15 @@
-STL10 Inference Summary
-----------------------
+STL10 Inference Summary (Warm-up excluded)
+-----------------------------------------
 Backend                     : naive
 Datatype                    : fp32
-Samples                     : 100
+Total images                : 100
+Timed images                : 99
 Accuracy (%)                : 58
 
-Total inference time (ms)   : 44835.1
-Avg inference / image (ms)  : 448.351
+=== End-to-End Inference ===
+Total inference time (ms)   : 44612
+Avg inference / image (ms)  : 450.626
 
-Total convolution time (ms) : 44360.5
-Avg convolution / image(ms): 443.605
+=== Convolution ONLY ===
+Total convolution time (ms) : 44142.4
+Avg convolution / image(ms): 445.882
