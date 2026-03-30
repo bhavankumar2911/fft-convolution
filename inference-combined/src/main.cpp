@@ -22,30 +22,48 @@
 
 // -------------------------------------------------
 // Compile-time backend selection
+//
+// Four backends:
+//   BACKEND_CPU_NAIVE  — all layers on CPU (default)
+//   BACKEND_GPU_NAIVE  — naive conv + ReLU + pool on GPU
+//   BACKEND_GPU_FFT    — FFT conv + ReLU + pool on GPU
+//   BACKEND_GPU_HYBRID — FFT for large maps, naive for small
+//                        ReLU + pool on GPU
 // -------------------------------------------------
-#ifdef USE_FFT
+#if defined(BACKEND_GPU_FFT)
     #include "cuda/FFTConvolution2D_CUDA.hpp"
-    template<typename T>
-    using Conv2D = FFTConvolution2D_CUDA<T>;
-    constexpr const char* BACKEND_NAME = "fft_cuda";
+    template<typename T> using Conv2D = FFTConvolution2D_CUDA<T>;
+    constexpr const char* BACKEND_NAME = "gpu_fft";
+
+#elif defined(BACKEND_GPU_NAIVE)
+    #include "cuda/NaiveCUDAConvolution2D.hpp"
+    template<typename T> using Conv2D = NaiveCUDAConvolution2D<T>;
+    constexpr const char* BACKEND_NAME = "gpu_naive";
+
+#elif defined(BACKEND_GPU_HYBRID)
+    #include "hybrid/HybridConvolution2D.hpp"
+    template<typename T> using Conv2D = HybridConvolution2D<T>;
+    constexpr const char* BACKEND_NAME = "gpu_hybrid";
+
 #else
+    // BACKEND_CPU_NAIVE (default — no macro needed)
     #include "cpu/NaiveCPUConvolution2D.hpp"
-    template<typename T>
-    using Conv2D = NaiveCPUConvolution2D<T>;
-    constexpr const char* BACKEND_NAME = "naive";
+    template<typename T> using Conv2D = NaiveCPUConvolution2D<T>;
+    constexpr const char* BACKEND_NAME = "cpu_naive";
 #endif
 
 int main() {
     // -------------------------------------------------
-    // Output directories
+    // Output directory
     // -------------------------------------------------
     std::string resultDir =
         std::string("../results/") + BACKEND_NAME + "_" + DTYPE_NAME;
-
     std::filesystem::create_directories(resultDir);
 
     // -------------------------------------------------
     // Build convolution layers
+    // All four backends use identical constructor arguments —
+    // the type alias Conv2D handles backend dispatch.
     // -------------------------------------------------
     std::vector<std::unique_ptr<IConvolution2D<Real>>> convLayers;
 
@@ -105,13 +123,10 @@ int main() {
     // -------------------------------------------------
     // Stats
     // -------------------------------------------------
-    int totalSamples = 0;
-    int correct = 0;
-
-    int timedSamples = 0;   // excludes warm-up image
-
-    double totalInferenceMsTimed = 0.0;
-    double totalConvMsTimed = 0.0;
+    int    totalSamples     = 0;
+    int    correct          = 0;
+    double totalInferenceMs = 0.0;
+    double totalConvMs      = 0.0;
 
     int totalImages = 0;
     for (const auto& e : std::filesystem::directory_iterator("../test_images_bin"))
@@ -122,7 +137,6 @@ int main() {
     // Inference loop
     // -------------------------------------------------
     int imageIndex = 0;
-    bool warmupSkipped = false;
 
     for (const auto& entry :
          std::filesystem::directory_iterator("../test_images_bin")) {
@@ -136,18 +150,15 @@ int main() {
         const std::string imageName = entry.path().filename().string();
 
         Tensor<Real> input =
-            BinaryTensorLoader::loadImageCHW<Real>(
-                imagePath, 3, 96, 96
-            );
+            BinaryTensorLoader::loadImageCHW<Real>(imagePath, 3, 96, 96);
 
         auto inferStart = std::chrono::high_resolution_clock::now();
         std::vector<Real> logits = model.forward(input);
-        auto inferEnd = std::chrono::high_resolution_clock::now();
+        auto inferEnd   = std::chrono::high_resolution_clock::now();
 
         double inferMs =
-            std::chrono::duration<double, std::milli>(
-                inferEnd - inferStart
-            ).count();
+            std::chrono::duration<double, std::milli>(inferEnd - inferStart).count();
+        totalInferenceMs += inferMs;
 
         // -----------------------------
         // Convolution timing
@@ -161,6 +172,11 @@ int main() {
             imageConvMs += t;
         }
 
+        totalConvMs += imageConvMs;
+
+        // -----------------------------
+        // Other layers timing
+        // -----------------------------
         csv << "," << model.featureExtractor().reluTimeMs()
             << "," << model.featureExtractor().poolTimeMs()
             << "," << model.fcTimeMs()
@@ -169,40 +185,24 @@ int main() {
             << "\n";
 
         // -----------------------------
-        // Warm-up handling
-        // -----------------------------
-        if (!warmupSkipped) {
-            warmupSkipped = true;
-            std::cout << "[Warm-up image ignored for timing]\n";
-        } else {
-            totalInferenceMsTimed += inferMs;
-            totalConvMsTimed += imageConvMs;
-            timedSamples++;
-        }
-
-        // -----------------------------
         // Accuracy
         // -----------------------------
-        int predicted = 0;
-        Real maxVal = logits[0];
+        int  predicted = 0;
+        Real maxVal    = logits[0];
         for (int i = 1; i < static_cast<int>(logits.size()); ++i) {
             if (logits[i] > maxVal) {
-                maxVal = logits[i];
+                maxVal    = logits[i];
                 predicted = i;
             }
         }
 
         std::size_t pos = imageName.find("_label_");
         int trueLabel = std::stoi(
-            imageName.substr(
-                pos + 7,
-                imageName.find(".bin") - (pos + 7)
-            )
+            imageName.substr(pos + 7, imageName.find(".bin") - (pos + 7))
         );
 
-        if (predicted == trueLabel)
-            correct++;
-
+        bool ok = (predicted == trueLabel);
+        if (ok) correct++;
         totalSamples++;
 
         // -----------------------------
@@ -212,39 +212,36 @@ int main() {
                   << imageName
                   << " | pred=" << predicted
                   << " | true=" << trueLabel
-                  << " | " << (predicted == trueLabel ? "OK" : "WRONG")
+                  << " | " << (ok ? "OK" : "WRONG")
                   << std::endl;
     }
 
     // -------------------------------------------------
-    // Summary (warm-up excluded)
+    // Summary
     // -------------------------------------------------
-    summary << "STL10 Inference Summary (Warm-up excluded)\n";
-    summary << "-----------------------------------------\n";
+    summary << "STL10 Inference Summary\n";
+    summary << "----------------------\n";
     summary << "Backend                     : " << BACKEND_NAME << "\n";
-    summary << "Datatype                    : " << DTYPE_NAME << "\n";
-    summary << "Total images                : " << totalSamples << "\n";
-    summary << "Timed images                : " << timedSamples << "\n";
+    summary << "Datatype                    : " << DTYPE_NAME   << "\n";
+    summary << "Samples                     : " << totalSamples << "\n";
     summary << "Accuracy (%)                : "
             << (100.0 * correct / totalSamples) << "\n\n";
 
-    summary << "=== End-to-End Inference ===\n";
-    summary << "Total inference time (ms)   : " << totalInferenceMsTimed << "\n";
+    summary << "Total inference time (ms)   : " << totalInferenceMs << "\n";
     summary << "Avg inference / image (ms)  : "
-            << (totalInferenceMsTimed / timedSamples) << "\n\n";
+            << (totalInferenceMs / totalSamples) << "\n\n";
 
-    summary << "=== Convolution ONLY ===\n";
-    summary << "Total convolution time (ms) : " << totalConvMsTimed << "\n";
-    summary << "Avg convolution / image(ms): "
-            << (totalConvMsTimed / timedSamples) << "\n";
+    summary << "Total convolution time (ms) : " << totalConvMs << "\n";
+    summary << "Avg convolution / image(ms) : "
+            << (totalConvMs / totalSamples) << "\n";
 
     csv.close();
     summary.close();
 
     std::cout << "\nInference complete.\n";
     std::cout << "Backend : " << BACKEND_NAME << "\n";
-    std::cout << "Datatype: " << DTYPE_NAME << "\n";
-    std::cout << "Results : " << resultDir << "\n";
+    std::cout << "Datatype: " << DTYPE_NAME   << "\n";
+    std::cout << "Results : " << resultDir    << "\n";
 
     return 0;
 }

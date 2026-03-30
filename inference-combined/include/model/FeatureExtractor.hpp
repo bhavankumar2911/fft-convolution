@@ -4,8 +4,24 @@
 #include <chrono>
 
 #include "core/IConvolution2D.hpp"
-#include "layers/ActivationReLU.hpp"
-#include "layers/MaxPool2D.hpp"
+
+// -------------------------------------------------
+// Backend-selected layer includes
+// CPU backends use CPU ReLU and MaxPool.
+// GPU backends use CUDA ReLU and MaxPool.
+// -------------------------------------------------
+#if defined(BACKEND_GPU_NAIVE) || defined(BACKEND_GPU_FFT) || defined(BACKEND_GPU_HYBRID)
+    #include "cuda/ActivationReLU_CUDA.hpp"
+    #include "cuda/MaxPool2D_CUDA.hpp"
+    template<typename T> using ReLUImpl   = ActivationReLU_CUDA<T>;
+    template<typename T> using PoolImpl   = MaxPool2D_CUDA<T>;
+#else
+    // BACKEND_CPU_NAIVE (default)
+    #include "layers/ActivationReLU.hpp"
+    #include "layers/MaxPool2D.hpp"
+    template<typename T> using ReLUImpl   = ActivationReLU<T>;
+    template<typename T> using PoolImpl   = MaxPool2D<T>;
+#endif
 
 template<typename T>
 class FeatureExtractor {
@@ -27,12 +43,12 @@ public:
             x = conv->forward(x);
 
             auto t0 = std::chrono::high_resolution_clock::now();
-            ActivationReLU<T>::apply(x);
+            ReLUImpl<T>::apply(x);
             auto t1 = std::chrono::high_resolution_clock::now();
             reluMs += std::chrono::duration<double, std::milli>(t1 - t0).count();
 
             t0 = std::chrono::high_resolution_clock::now();
-            x = MaxPool2D<T>::apply(x);
+            x = PoolImpl<T>::apply(x);
             t1 = std::chrono::high_resolution_clock::now();
             poolMs += std::chrono::duration<double, std::milli>(t1 - t0).count();
         }
