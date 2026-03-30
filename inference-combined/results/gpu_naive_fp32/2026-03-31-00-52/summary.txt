@@ -1,0 +1,29 @@
+STL10 Inference Summary
+----------------------
+Backend                     : gpu_naive
+Datatype                    : fp32
+Samples                     : 100
+Accuracy (%)                : 58
+
+Total inference time (ms)   : 971.865
+Avg inference / image (ms)  : 9.71865
+
+Total convolution time (ms) : 339.456
+Avg convolution / image(ms) : 3.39456
+
+Layerwise Avg (excl. warmup, N=99)
+-----------------------------------------
+  Conv1 avg (ms)          : 0.841408
+  Conv2 avg (ms)          : 1.608
+  Conv3 avg (ms)          : 0.531736
+  Conv4 avg (ms)          : 0.410309
+  ReLU  avg (ms)          : 0.989104
+  Pool  avg (ms)          : 0.756808
+  FC    avg (ms)          : 4.567
+  Total avg (ms)          : 9.71075
+
+Energy (excl. warmup, N=99)
+-----------------------------------------
+  Avg energy / image (J)  : 0.912802
+  Avg power  / image (W)  : 73.4008
+  Total energy       (J)  : 90.3674

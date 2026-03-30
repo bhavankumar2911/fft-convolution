@@ -7,6 +7,12 @@
 #include <string>
 #include <ctime>
 
+// NVML energy measurement — GPU backends only
+#if defined(BACKEND_GPU_NAIVE) || defined(BACKEND_GPU_FFT) || defined(BACKEND_GPU_HYBRID)
+    #include "utils/EnergyMeter.hpp"
+    #define MEASURE_ENERGY
+#endif
+
 #include "data/BinaryTensorLoader.hpp"
 #include "model/STL10CNNModel.hpp"
 
@@ -124,7 +130,11 @@ int main() {
     csv << "image_name,"
         << "conv1_ms,conv2_ms,conv3_ms,conv4_ms,"
         << "relu_ms,pool_ms,fc_ms,"
-        << "total_conv_ms,total_infer_ms\n";
+        << "total_conv_ms,total_infer_ms"
+#ifdef MEASURE_ENERGY
+        << ",energy_J,avg_power_W"
+#endif
+        << "\n";
 
     // -------------------------------------------------
     // Stats
@@ -144,6 +154,12 @@ int main() {
     double sumFcMs    = 0.0;
     double sumInferMs = 0.0;
     int    warmSamples = 0;  // samples counted in warmup-excluded averages
+
+#ifdef MEASURE_ENERGY
+    EnergyMeter energyMeter;
+    double sumEnergyJ  = 0.0;
+    double sumPowerW   = 0.0;
+#endif
 
     int totalImages = 0;
     for (const auto& e : std::filesystem::directory_iterator("../test_images_bin"))
@@ -169,9 +185,15 @@ int main() {
         Tensor<Real> input =
             BinaryTensorLoader::loadImageCHW<Real>(imagePath, 3, 96, 96);
 
+#ifdef MEASURE_ENERGY
+        energyMeter.start();
+#endif
         auto inferStart = std::chrono::high_resolution_clock::now();
         std::vector<Real> logits = model.forward(input);
         auto inferEnd   = std::chrono::high_resolution_clock::now();
+#ifdef MEASURE_ENERGY
+        energyMeter.stop();
+#endif
 
         double inferMs =
             std::chrono::duration<double, std::milli>(inferEnd - inferStart).count();
@@ -203,6 +225,10 @@ int main() {
             << "," << fcMs
             << "," << imageConvMs
             << "," << inferMs
+#ifdef MEASURE_ENERGY
+            << "," << energyMeter.energyJ()
+            << "," << energyMeter.avgPowerW()
+#endif
             << "\n";
 
         // Accumulate warmup-excluded stats (skip image 1)
@@ -215,6 +241,10 @@ int main() {
             sumFcMs    += fcMs;
             sumInferMs += inferMs;
             warmSamples++;
+#ifdef MEASURE_ENERGY
+            sumEnergyJ += energyMeter.energyJ();
+            sumPowerW  += energyMeter.avgPowerW();
+#endif
         }
 
         // -----------------------------
@@ -280,6 +310,15 @@ int main() {
     summary << "  Pool  avg (ms)          : " << (sumPoolMs  / warmSamples) << "\n";
     summary << "  FC    avg (ms)          : " << (sumFcMs    / warmSamples) << "\n";
     summary << "  Total avg (ms)          : " << (sumInferMs / warmSamples) << "\n";
+#ifdef MEASURE_ENERGY
+    summary << "\nEnergy (excl. warmup, N=" << warmSamples << ")\n";
+    summary << "-----------------------------------------\n";
+    summary << "  Avg energy / image (J)  : " << (sumEnergyJ / warmSamples) << "\n";
+    summary << "  Avg power  / image (W)  : " << (sumPowerW  / warmSamples) << "\n";
+    summary << "  Total energy       (J)  : " << sumEnergyJ << "\n";
+#else
+    summary << "\nEnergy                  : N/A (CPU backend — no NVML)\n";
+#endif
 
     csv.close();
     summary.close();

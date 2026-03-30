@@ -13,7 +13,8 @@ INCLUDE_DIR="include"
 WEIGHTS_DIR="trained_weights_fp32"
 BINARY_DIR="src"
 
-NVCC_FLAGS="-O3 -std=c++17 -x cu -I${INCLUDE_DIR} -lcufft"
+NVCC_FLAGS_CPU="-O3 -std=c++17 -x cu -I${INCLUDE_DIR} -lcufft"
+NVCC_FLAGS_GPU="-O3 -std=c++17 -x cu -I${INCLUDE_DIR} -lcufft -lnvidia-ml"
 
 # -------------------------------------------------
 # Helper functions
@@ -29,9 +30,9 @@ compile() {
 
     if [ -z "$macro" ]; then
         # CPU naive — no macro needed
-        nvcc ${NVCC_FLAGS} -o ${BINARY_DIR}/${binary} ${SRC}
+        nvcc ${NVCC_FLAGS_CPU} -o ${BINARY_DIR}/${binary} ${SRC}
     else
-        nvcc ${NVCC_FLAGS} -D${macro} -o ${BINARY_DIR}/${binary} ${SRC}
+        nvcc ${NVCC_FLAGS_GPU} -D${macro} -o ${BINARY_DIR}/${binary} ${SRC}
     fi
 
     echo " Done: ${BINARY_DIR}/${binary}"
@@ -55,8 +56,8 @@ run() {
 # -------------------------------------------------
 # Backend 1 — CPU Naive
 # -------------------------------------------------
-compile "inference_cpu_naive"  ""
-run     "inference_cpu_naive"
+#compile "inference_cpu_naive"  ""
+#run     "inference_cpu_naive"
 
 # -------------------------------------------------
 # Backend 2 — GPU Naive
