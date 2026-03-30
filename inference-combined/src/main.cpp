@@ -128,11 +128,22 @@ int main() {
 
     // -------------------------------------------------
     // Stats
+    // Image 1 is excluded from averages (GPU warmup bias).
+    // It is still written to the CSV for full transparency.
     // -------------------------------------------------
     int    totalSamples     = 0;
     int    correct          = 0;
     double totalInferenceMs = 0.0;
     double totalConvMs      = 0.0;
+
+    // Layerwise accumulators — warmup-excluded
+    constexpr int NUM_CONV = 4;
+    double sumConvMs[NUM_CONV] = {0.0, 0.0, 0.0, 0.0};
+    double sumReluMs  = 0.0;
+    double sumPoolMs  = 0.0;
+    double sumFcMs    = 0.0;
+    double sumInferMs = 0.0;
+    int    warmSamples = 0;  // samples counted in warmup-excluded averages
 
     int totalImages = 0;
     for (const auto& e : std::filesystem::directory_iterator("../test_images_bin"))
@@ -183,12 +194,28 @@ int main() {
         // -----------------------------
         // Other layers timing
         // -----------------------------
-        csv << "," << model.featureExtractor().reluTimeMs()
-            << "," << model.featureExtractor().poolTimeMs()
-            << "," << model.fcTimeMs()
+        double reluMs = model.featureExtractor().reluTimeMs();
+        double poolMs = model.featureExtractor().poolTimeMs();
+        double fcMs   = model.fcTimeMs();
+
+        csv << "," << reluMs
+            << "," << poolMs
+            << "," << fcMs
             << "," << imageConvMs
             << "," << inferMs
             << "\n";
+
+        // Accumulate warmup-excluded stats (skip image 1)
+        if (imageIndex > 1) {
+            const auto& convs = model.featureExtractor().convs();
+            for (int i = 0; i < NUM_CONV; ++i)
+                sumConvMs[i] += convs[i]->lastExecutionTimeMs();
+            sumReluMs  += reluMs;
+            sumPoolMs  += poolMs;
+            sumFcMs    += fcMs;
+            sumInferMs += inferMs;
+            warmSamples++;
+        }
 
         // -----------------------------
         // Accuracy
@@ -239,7 +266,20 @@ int main() {
 
     summary << "Total convolution time (ms) : " << totalConvMs << "\n";
     summary << "Avg convolution / image(ms) : "
-            << (totalConvMs / totalSamples) << "\n";
+            << (totalConvMs / totalSamples) << "\n\n";
+
+    // ----------------------------------------------------------
+    // Layerwise averages (warmup image excluded, N = warmSamples)
+    // ----------------------------------------------------------
+    summary << "Layerwise Avg (excl. warmup, N=" << warmSamples << ")\n";
+    summary << "-----------------------------------------\n";
+    for (int i = 0; i < NUM_CONV; ++i)
+        summary << "  Conv" << (i + 1) << " avg (ms)          : "
+                << (sumConvMs[i] / warmSamples) << "\n";
+    summary << "  ReLU  avg (ms)          : " << (sumReluMs  / warmSamples) << "\n";
+    summary << "  Pool  avg (ms)          : " << (sumPoolMs  / warmSamples) << "\n";
+    summary << "  FC    avg (ms)          : " << (sumFcMs    / warmSamples) << "\n";
+    summary << "  Total avg (ms)          : " << (sumInferMs / warmSamples) << "\n";
 
     csv.close();
     summary.close();

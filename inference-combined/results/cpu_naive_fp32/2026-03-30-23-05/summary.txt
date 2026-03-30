@@ -1,0 +1,23 @@
+STL10 Inference Summary
+----------------------
+Backend                     : cpu_naive
+Datatype                    : fp32
+Samples                     : 100
+Accuracy (%)                : 58
+
+Total inference time (ms)   : 43889.5
+Avg inference / image (ms)  : 438.895
+
+Total convolution time (ms) : 43422.2
+Avg convolution / image(ms) : 434.222
+
+Layerwise Avg (excl. warmup, N=99)
+-----------------------------------------
+  Conv1 avg (ms)          : 41.2054
+  Conv2 avg (ms)          : 215.94
+  Conv3 avg (ms)          : 88.475
+  Conv4 avg (ms)          : 88.3655
+  ReLU  avg (ms)          : 0.0569236
+  Pool  avg (ms)          : 0.0979357
+  FC    avg (ms)          : 4.51132
+  Total avg (ms)          : 438.658

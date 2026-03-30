@@ -1,0 +1,23 @@
+STL10 Inference Summary
+----------------------
+Backend                     : gpu_hybrid
+Datatype                    : fp32
+Samples                     : 100
+Accuracy (%)                : 58
+
+Total inference time (ms)   : 11358.6
+Avg inference / image (ms)  : 113.586
+
+Total convolution time (ms) : 10700.6
+Avg convolution / image(ms) : 107.006
+
+Layerwise Avg (excl. warmup, N=99)
+-----------------------------------------
+  Conv1 avg (ms)          : 10.7183
+  Conv2 avg (ms)          : 95.0901
+  Conv3 avg (ms)          : 0.46601
+  Conv4 avg (ms)          : 0.43283
+  ReLU  avg (ms)          : 1.11445
+  Pool  avg (ms)          : 0.911604
+  FC    avg (ms)          : 4.54304
+  Total avg (ms)          : 113.283

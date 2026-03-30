@@ -55,8 +55,8 @@ run() {
 # -------------------------------------------------
 # Backend 1 — CPU Naive
 # -------------------------------------------------
-#compile "inference_cpu_naive"  ""
-#run     "inference_cpu_naive"
+compile "inference_cpu_naive"  ""
+run     "inference_cpu_naive"
 
 # -------------------------------------------------
 # Backend 2 — GPU Naive
