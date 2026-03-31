@@ -48,7 +48,7 @@ nvcc -O3 -std=c++17 -x cu \
     -I${INCLUDE_DIR} \
     -I${SCRIPT_DIR}/fftw-3.3.10/api \
     -L${SCRIPT_DIR}/fftw-3.3.10/.libs \
-    -lcufft -lfftw3f \
+    -lcufft -lfftw3f -lnvidia-ml \
     -o ${BINARY} ${SRC}
 echo " Done: ${BINARY}"
 
