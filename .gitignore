@@ -225,3 +225,5 @@ new-fft/fft_outputs64/
 
 test/images/
 test/kernels/
+
+inference-combined/bench_data/
