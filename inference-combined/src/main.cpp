@@ -7,12 +7,6 @@
 #include <string>
 #include <ctime>
 
-// NVML energy measurement — GPU backends only
-#if defined(BACKEND_GPU_NAIVE) || defined(BACKEND_GPU_FFT) || defined(BACKEND_GPU_HYBRID)
-    #include "utils/EnergyMeter.hpp"
-    #define MEASURE_ENERGY
-#endif
-
 #include "data/BinaryTensorLoader.hpp"
 #include "model/STL10CNNModel.hpp"
 
@@ -29,13 +23,13 @@
 
 // -------------------------------------------------
 // Compile-time backend selection
-//
-// Four backends:
-//   BACKEND_CPU_NAIVE  — all layers on CPU (default)
-//   BACKEND_GPU_NAIVE  — naive conv + ReLU + pool on GPU
-//   BACKEND_GPU_FFT    — FFT conv + ReLU + pool on GPU
-//   BACKEND_GPU_HYBRID — FFT for large maps, naive for small
-//                        ReLU + pool on GPU
+// Six backends:
+//   BACKEND_CPU_NAIVE   — naive conv, all on CPU (default)
+//   BACKEND_CPU_FFT     — FFTW conv, all on CPU
+//   BACKEND_CPU_HYBRID  — FFT/Naive per layer on CPU
+//   BACKEND_GPU_NAIVE   — naive CUDA conv, GPU ReLU/Pool
+//   BACKEND_GPU_FFT     — cuFFT conv, GPU ReLU/Pool
+//   BACKEND_GPU_HYBRID  — FFT/Naive per layer, GPU ReLU/Pool
 // -------------------------------------------------
 #if defined(BACKEND_GPU_FFT)
     #include "cuda/FFTConvolution2D_CUDA.hpp"
@@ -52,11 +46,32 @@
     template<typename T> using Conv2D = HybridConvolution2D<T>;
     constexpr const char* BACKEND_NAME = "gpu_hybrid";
 
+#elif defined(BACKEND_CPU_FFT)
+    #include "cpu/FFTConvolution2D_CPU.hpp"
+    template<typename T> using Conv2D = FFTConvolution2D_CPU<T>;
+    constexpr const char* BACKEND_NAME = "cpu_fft";
+
+#elif defined(BACKEND_CPU_HYBRID)
+    #include "cpu/HybridConvolution2D_CPU.hpp"
+    template<typename T> using Conv2D = HybridConvolution2D_CPU<T>;
+    constexpr const char* BACKEND_NAME = "cpu_hybrid";
+
 #else
-    // BACKEND_CPU_NAIVE (default — no macro needed)
+    // BACKEND_CPU_NAIVE (default)
     #include "cpu/NaiveCPUConvolution2D.hpp"
     template<typename T> using Conv2D = NaiveCPUConvolution2D<T>;
     constexpr const char* BACKEND_NAME = "cpu_naive";
+#endif
+
+// All backends use IConvolution2D interface via FeatureExtractor
+template<typename T> using ConvVec = std::vector<std::unique_ptr<IConvolution2D<T>>>;
+
+// -------------------------------------------------
+// NVML energy measurement — GPU backends only
+// -------------------------------------------------
+#if defined(BACKEND_GPU_NAIVE) || defined(BACKEND_GPU_FFT) || defined(BACKEND_GPU_HYBRID)
+    #include "utils/EnergyMeter.hpp"
+    #define MEASURE_ENERGY
 #endif
 
 int main() {
@@ -77,7 +92,7 @@ int main() {
     // All four backends use identical constructor arguments —
     // the type alias Conv2D handles backend dispatch.
     // -------------------------------------------------
-    std::vector<std::unique_ptr<IConvolution2D<Real>>> convLayers;
+    ConvVec<Real> convLayers;
 
     convLayers.push_back(std::make_unique<Conv2D<Real>>(
         3, 32, 5, 2,

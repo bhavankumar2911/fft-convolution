@@ -6,21 +6,19 @@
 #include "core/IConvolution2D.hpp"
 
 // -------------------------------------------------
-// Backend-selected layer includes
-// CPU backends use CPU ReLU and MaxPool.
-// GPU backends use CUDA ReLU and MaxPool.
+// Backend-selected ReLU and Pool implementations
 // -------------------------------------------------
 #if defined(BACKEND_GPU_NAIVE) || defined(BACKEND_GPU_FFT) || defined(BACKEND_GPU_HYBRID)
     #include "cuda/ActivationReLU_CUDA.hpp"
     #include "cuda/MaxPool2D_CUDA.hpp"
-    template<typename T> using ReLUImpl   = ActivationReLU_CUDA<T>;
-    template<typename T> using PoolImpl   = MaxPool2D_CUDA<T>;
+    template<typename T> using ReLUImpl = ActivationReLU_CUDA<T>;
+    template<typename T> using PoolImpl = MaxPool2D_CUDA<T>;
 #else
-    // BACKEND_CPU_NAIVE (default)
+    // CPU backends: CPU_NAIVE, CPU_FFT, CPU_HYBRID all use CPU ReLU/Pool
     #include "layers/ActivationReLU.hpp"
     #include "layers/MaxPool2D.hpp"
-    template<typename T> using ReLUImpl   = ActivationReLU<T>;
-    template<typename T> using PoolImpl   = MaxPool2D<T>;
+    template<typename T> using ReLUImpl = ActivationReLU<T>;
+    template<typename T> using PoolImpl = MaxPool2D<T>;
 #endif
 
 template<typename T>

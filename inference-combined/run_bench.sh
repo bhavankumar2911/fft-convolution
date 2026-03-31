@@ -7,6 +7,13 @@
 set -e
 
 # -------------------------------------------------
+# FFTW runtime library path — self-contained
+# -------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export LD_LIBRARY_PATH="${SCRIPT_DIR}/fftw-3.3.10/.libs:${LD_LIBRARY_PATH}"
+
+
+# -------------------------------------------------
 # Config
 # -------------------------------------------------
 DATA_DIR="./bench_data"
@@ -39,7 +46,9 @@ echo "============================================"
 mkdir -p bench
 nvcc -O3 -std=c++17 -x cu \
     -I${INCLUDE_DIR} \
-    -lcufft \
+    -I${SCRIPT_DIR}/fftw-3.3.10/api \
+    -L${SCRIPT_DIR}/fftw-3.3.10/.libs \
+    -lcufft -lfftw3f \
     -o ${BINARY} ${SRC}
 echo " Done: ${BINARY}"
 
