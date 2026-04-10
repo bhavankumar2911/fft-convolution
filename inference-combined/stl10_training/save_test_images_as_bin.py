@@ -54,7 +54,7 @@ def main():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="../inference-combined/test_images_bin"
+        default="../test_images_bin"
     )
     parser.add_argument(
         "--dtype",
