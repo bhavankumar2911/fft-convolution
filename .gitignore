@@ -228,3 +228,5 @@ test/kernels/
 
 inference-combined/bench_data/
 inference-combined/fftw-3.3.10
+
+.DS_Store
